@@ -1,5 +1,4 @@
 // ─── API URL - Railway deploy qilgandan keyin shu yerga o'z URL'ingizni yozing ───
-// Masalan: const API = "https://steam-plaza-backend.up.railway.app";
 const API = "https://steamplazamusaboqatestbackend-production.up.railway.app";  // <-- BU YERGA O'Z URL'INGIZNI YOZING
 
 // ─── STATE ─────────────────────────────────────────────────────────────────────
@@ -7,6 +6,7 @@ let curClass = "";
 let tList = [];
 let qIdx = 0;
 let score = 0;
+let allGlobalClasses = []; // Barcha sinflarni keshda saqlash
 
 // ─── HELPER: API CALL ──────────────────────────────────────────────────────────
 async function api(path, method = 'GET', body = null) {
@@ -69,15 +69,18 @@ async function loadData() {
   const sg = document.getElementById('st-grid');
   const ag = document.getElementById('adm-grid');
   const sel = document.getElementById('adm-sel-c');
+  const chkBoxList = document.getElementById('classes-checkbox-list');
 
   sg.innerHTML = "<p>Yuklanmoqda...</p>";
 
   try {
     const classes = await api('/api/classes');
+    allGlobalClasses = classes; // Keshga saqlaymiz
 
     sg.innerHTML = "";
     ag.innerHTML = "";
     sel.innerHTML = "<option value=''>Sinf tanlang</option>";
+    if(chkBoxList) chkBoxList.innerHTML = "";
 
     if (classes.length === 0) {
       sg.innerHTML = "<p style='color:#64748b'>Hech qanday sinf yo'q</p>";
@@ -91,11 +94,41 @@ async function loadData() {
           <i class="ri-delete-bin-line icon-btn" onclick="delClass('${c.id}')" style="cursor:pointer; color:red"></i>
         </div>`;
       sel.innerHTML += `<option value="${c.id}">${c.id}</option>`;
+      
+      if(chkBoxList) {
+        chkBoxList.innerHTML += `
+          <label style="display: flex; align-items: center; gap: 5px; font-weight: normal; margin: 0; width: calc(25% - 15px); min-width: 80px; cursor:pointer;">
+            <input type="checkbox" name="target_classes" value="${c.id}" style="width: auto; margin: 0;"> ${c.id}
+          </label>
+        `;
+      }
     });
   } catch (err) {
     sg.innerHTML = `<p style="color:red">Xatolik: ${err.message}. API URL to'g'riligini tekshiring.</p>`;
   }
 }
+
+// ─── PARALLEL CLASSED SELECTION HELPERS ───────────────────────────────────────
+window.selectAllParallelClasses = () => {
+  const currentSelectedClass = document.getElementById('adm-sel-c').value;
+  if(!currentSelectedClass) return alert("Avval yuqoridan asosiy sinfni tanlang!");
+  
+  const grade = getGrade(currentSelectedClass);
+  const checkboxes = document.querySelectorAll('input[name="target_classes"]');
+  
+  checkboxes.forEach(cb => {
+    if(getGrade(cb.value) === grade) {
+      cb.checked = true;
+    } else {
+      cb.checked = false;
+    }
+  });
+};
+
+window.clearSelectionClasses = () => {
+  const checkboxes = document.querySelectorAll('input[name="target_classes"]');
+  checkboxes.forEach(cb => cb.checked = false);
+};
 
 // ─── SINF QO'SHISH ─────────────────────────────────────────────────────────────
 window.addClass = async () => {
@@ -132,9 +165,16 @@ window.saveTest = async () => {
 
   if (!classId || !question || !correct_answer) return alert("To'ldiring!");
 
+  // Qo'shimcha tanlangan parallel sinflarni yig'amiz
+  const checkboxes = document.querySelectorAll('input[name="target_classes"]:checked');
+  const targetClasses = [classId];
+  checkboxes.forEach(cb => {
+    if(cb.value !== classId) targetClasses.push(cb.value);
+  });
+
   try {
     await api('/api/classes/' + classId + '/tests', 'POST', {
-      question, correct_answer, wrong1, wrong2
+      question, correct_answer, wrong1, wrong2, targetClasses
     });
     document.getElementById('adm-q').value = "";
     document.getElementById('adm-a').value = "";
@@ -190,18 +230,16 @@ window.delT = async (testId) => {
 // ─── TEST BOSHLASH (AUTH) ──────────────────────────────────────────────────────
 window.openAuth = async (id) => {
   curClass = id;
-  const grade = getGrade(id);
 
   try {
-    // Grade bo'yicha barcha testlarni olish (random tartibda)
-    const tests = await api('/api/grade/' + grade + '/tests');
+    // Sinf nomi yoki parallel bo'yicha bazadan random testlarni olamiz
+    const tests = await api('/api/grade/' + id + '/tests');
 
     if (tests.length === 0) {
-      return alert(grade + "-sinflar uchun test yuklanmagan!");
+      return alert(id + " sinfi uchun test yuklanmagan!");
     }
 
-    // Savollarni random aralashtirish
-    tList = tests.sort(() => Math.random() - 0.5);
+    tList = tests; // Backend o'zi random beradi, xohlasangiz yana aralashtiramiz: .sort(() => Math.random() - 0.5)
 
     document.getElementById('sel-c-title').innerText = id;
     document.getElementById('v-home').classList.add('hidden');
@@ -232,7 +270,6 @@ function renderQ() {
   const box = document.getElementById('opt-box');
   box.innerHTML = "";
 
-  // Options - JSON parse qilamiz
   let options = [];
   try {
     options = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
@@ -240,7 +277,6 @@ function renderQ() {
     options = [q.correct_answer];
   }
 
-  // Xoli variantlarni olib tashlash va random aralashtirish
   [...options]
     .filter(o => o && o.trim() !== '')
     .sort(() => Math.random() - 0.5)
@@ -297,7 +333,7 @@ window.loadResGrid = async () => {
   }
 };
 
-// ─── SINF NATIJALARINI OCHISH ─────────────────────────────────────────────────
+// ─── SINF NATIJALARINI OCHISH (Top-3 rangli va saralangan holatda) ──────────────
 window.openRes = async (id) => {
   document.getElementById('res-grid').classList.add('hidden');
   document.getElementById('res-detail').classList.remove('hidden');
@@ -305,20 +341,36 @@ window.openRes = async (id) => {
   document.getElementById('pdf-single-btn').onclick = () => downloadSinglePDF(id);
 
   const tb = document.getElementById('res-tbody');
-  tb.innerHTML = "<tr><td colspan='5' style='text-align:center'>Yuklanmoqda...</td></tr>";
+  tb.innerHTML = "<tr><td colspan='6' style='text-align:center'>Yuklanmoqda...</td></tr>";
 
   try {
     const results = await api('/api/classes/' + id + '/results');
     tb.innerHTML = "";
 
     if (results.length === 0) {
-      tb.innerHTML = "<tr><td colspan='5' style='text-align:center; padding:20px'>Natija yo'q</td></tr>";
+      tb.innerHTML = "<tr><td colspan='6' style='text-align:center; padding:20px'>Natija yo'q</td></tr>";
       return;
     }
 
-    results.forEach(r => {
+    results.forEach((r, idx) => {
+      let badgeStyle = "";
+      let placeLabel = idx + 1;
+
+      // 1, 2, 3-o'rinlarni ranglar bilan ajratish
+      if (idx === 0) {
+        badgeStyle = "background-color: #fef08a; color: #854d0e; font-weight: 900; border-radius: 6px; padding: 4px 8px;"; // Oltin
+        placeLabel = "🥇 1";
+      } else if (idx === 1) {
+        badgeStyle = "background-color: #e2e8f0; color: #334155; font-weight: 900; border-radius: 6px; padding: 4px 8px;"; // Kumush
+        placeLabel = "🥈 2";
+      } else if (idx === 2) {
+        badgeStyle = "background-color: #ffedd5; color: #c2410c; font-weight: 900; border-radius: 6px; padding: 4px 8px;"; // Bronza
+        placeLabel = "🥉 3";
+      }
+
       tb.innerHTML += `
         <tr style="border-bottom:1px solid #eee">
+          <td style="padding:15px"><span style="${badgeStyle}">${placeLabel}</span></td>
           <td style="padding:15px"><b>${r.team_name}</b></td>
           <td style="padding:15px">${r.student_name}</td>
           <td style="padding:15px"><b style="color:var(--primary)">${r.score} / ${r.total}</b></td>
@@ -331,7 +383,7 @@ window.openRes = async (id) => {
         </tr>`;
     });
   } catch (err) {
-    tb.innerHTML = "<tr><td colspan='5' style='color:red; padding:15px'>Xatolik: " + err.message + "</td></tr>";
+    tb.innerHTML = "<tr><td colspan='6' style='color:red; padding:15px'>Xatolik: " + err.message + "</td></tr>";
   }
 };
 
@@ -347,29 +399,29 @@ window.delResult = async (id, classId) => {
   }
 };
 
-// ─── PDF: ALOHIDA SINF ────────────────────────────────────────────────────────
+// ─── PDF: ALOHIDA SINF NATIJALARI ─────────────────────────────────────────────
 window.downloadSinglePDF = async (className) => {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   try {
     const results = await api('/api/classes/' + className + '/results');
-    const rows = results.map(r => [r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
+    const rows = results.map((r, idx) => [idx + 1, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
     doc.text(className + " Sinf Natijalari", 14, 15);
-    doc.autoTable({ head: [['Jamoa', 'Ism', 'Ball', 'Vaqt']], body: rows, startY: 20, theme: 'grid' });
+    doc.autoTable({ head: [['O\'rin', 'Jamoa', 'Ism', 'Ball', 'Vaqt']], body: rows, startY: 20, theme: 'grid' });
     doc.save(`${className}_natijalari.pdf`);
   } catch (err) {
     alert("PDF yaratishda xatolik: " + err.message);
   }
 };
 
-// ─── PDF: BARCHA NATIJALAR ────────────────────────────────────────────────────
+// ─── PDF: BARCHA NATIJALAR (TO'LIQ RO'YXAT) ───────────────────────────────────
 window.downloadAllResultsPDF = async () => {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   let y = 20;
 
   try {
-    const classes = await api('/api/classes');
+    const classes = allGlobalClasses.length > 0 ? allGlobalClasses : await api('/api/classes');
     doc.setFontSize(18);
     doc.text("STEAM PLAZA - UMUMIY NATIJALAR", 14, y);
     y += 10;
@@ -377,15 +429,63 @@ window.downloadAllResultsPDF = async () => {
     for (const c of classes) {
       const results = await api('/api/classes/' + c.id + '/results');
       if (results.length > 0) {
-        if (y > 250) { doc.addPage(); y = 20; }
+        if (y > 240) { doc.addPage(); y = 20; }
         doc.setFontSize(14);
-        doc.text(c.id + " Natijalari", 14, y);
-        const rows = results.map(r => [r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
-        doc.autoTable({ head: [['Jamoa', 'Ism', 'Ball', 'Vaqt']], body: rows, startY: y + 2, theme: 'grid' });
+        doc.text(c.id + " Sinf Natijalari", 14, y);
+        const rows = results.map((r, idx) => [idx + 1, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
+        doc.autoTable({ head: [['O\'rin', 'Jamoa', 'Ism', 'Ball', 'Vaqt']], body: rows, startY: y + 2, theme: 'grid' });
         y = doc.lastAutoTable.finalY + 15;
       }
     }
     doc.save("barcha_natijalar.pdf");
+  } catch (err) {
+    alert("PDF yaratishda xatolik: " + err.message);
+  }
+};
+
+// ─── PDF: FAQAT HAR BIR SINFDAN TOP-3 GO'LIBLAR KESIMIDA ───────────────────────
+window.downloadTop3PDF = async () => {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = 20;
+
+  try {
+    const classes = allGlobalClasses.length > 0 ? allGlobalClasses : await api('/api/classes');
+    doc.setFontSize(18);
+    doc.text("STEAM PLAZA - TOP-3 G'OLIBLAR (SINFLAR KESIMIDA)", 14, y);
+    y += 12;
+
+    for (const c of classes) {
+      const results = await api('/api/classes/' + c.id + '/results');
+      // Faqat birinchi 3 ta o'rinni qirqib olamiz
+      const top3 = results.slice(0, 3);
+      
+      if (top3.length > 0) {
+        if (y > 240) { doc.addPage(); y = 20; }
+        doc.setFontSize(14);
+        doc.setTextColor(16, 185, 129); // Chiroyli yashil rang sarlavha uchun
+        doc.text(`🏆 ${c.id} Sinf G'oliblari`, 14, y);
+        doc.setTextColor(0, 0, 0);
+
+        const rows = top3.map((r, idx) => {
+          let medal = idx + 1;
+          if (idx === 0) medal = "1 (Oltin) ";
+          if (idx === 1) medal = "2 (Kumush)";
+          if (idx === 2) medal = "3 (Bronza)";
+          return [medal, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || ''];
+        });
+
+        doc.autoTable({ 
+          head: [['O\'rin', 'Jamoa', 'Ism', 'Ball', 'Vaqt']], 
+          body: rows, 
+          startY: y + 3, 
+          theme: 'striped',
+          headStyles: { fillColor: [16, 185, 129] }
+        });
+        y = doc.lastAutoTable.finalY + 12;
+      }
+    }
+    doc.save("top3_sinflar_goliplari.pdf");
   } catch (err) {
     alert("PDF yaratishda xatolik: " + err.message);
   }

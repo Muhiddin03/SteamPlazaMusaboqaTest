@@ -249,8 +249,8 @@ window.openAuth = async (id) => {
 
 // ─── TEST BOSHLASH ─────────────────────────────────────────────────────────────
 window.startQuiz = () => {
-  if (!document.getElementById('st-name').value || !document.getElementById('st-team').value) {
-    return alert("To'ldiring!");
+  if (!document.getElementById('st-name').value.trim()) {
+    return alert("Iltimos, ism va familiyangizni kiriting!");
   }
   document.getElementById('v-auth').classList.add('hidden');
   document.getElementById('v-quiz').classList.remove('hidden');
@@ -294,10 +294,9 @@ function renderQ() {
 
 // ─── TEST YAKUNLASH ────────────────────────────────────────────────────────────
 async function finish() {
-  const team = document.getElementById('st-team').value;
-  const name = document.getElementById('st-name').value;
+  const name = document.getElementById('st-name').value.trim();
 
-  document.getElementById('f-team').innerText = team;
+  document.getElementById('f-name').innerText = name;
   document.getElementById('f-score').innerText = score;
   document.getElementById('f-wrong').innerText = tList.length - score;
   document.getElementById('m-finish').classList.add('active');
@@ -305,7 +304,7 @@ async function finish() {
   try {
     await api('/api/results', 'POST', {
       class_id: curClass,
-      team_name: team,
+      team_name: "Yakka", // Backendda validation xatosi bermasligi uchun default qiymat yuboramiz
       student_name: name,
       score,
       total: tList.length,
@@ -339,14 +338,14 @@ window.openRes = async (id) => {
   document.getElementById('pdf-single-btn').onclick = () => downloadSinglePDF(id);
 
   const tb = document.getElementById('res-tbody');
-  tb.innerHTML = "<tr><td colspan='6' style='text-align:center'>Yuklanmoqda...</td></tr>";
+  tb.innerHTML = "<tr><td colspan='5' style='text-align:center'>Yuklanmoqda...</td></tr>";
 
   try {
     const results = await api('/api/classes/' + id + '/results');
     tb.innerHTML = "";
 
     if (results.length === 0) {
-      tb.innerHTML = "<tr><td colspan='6' style='text-align:center; padding:20px'>Natija yo'q</td></tr>";
+      tb.innerHTML = "<tr><td colspan='5' style='text-align:center; padding:20px'>Natija yo'q</td></tr>";
       return;
     }
 
@@ -368,8 +367,7 @@ window.openRes = async (id) => {
       tb.innerHTML += `
         <tr style="border-bottom:1px solid #eee">
           <td style="padding:15px"><span style="${badgeStyle}">${placeLabel}</span></td>
-          <td style="padding:15px"><b>${r.team_name}</b></td>
-          <td style="padding:15px">${r.student_name}</td>
+          <td style="padding:15px"><b>${r.student_name}</b></td>
           <td style="padding:15px"><b style="color:var(--primary)">${r.score} / ${r.total}</b></td>
           <td style="padding:15px"><small>${r.time_taken || new Date(r.created_at).toLocaleString('uz-UZ')}</small></td>
           <td style="padding:15px; text-align:right">
@@ -380,7 +378,7 @@ window.openRes = async (id) => {
         </tr>`;
     });
   } catch (err) {
-    tb.innerHTML = "<tr><td colspan='6' style='color:red; padding:15px'>Xatolik: " + err.message + "</td></tr>";
+    tb.innerHTML = "<tr><td colspan='5' style='color:red; padding:15px'>Xatolik: " + err.message + "</td></tr>";
   }
 };
 
@@ -402,9 +400,9 @@ window.downloadSinglePDF = async (className) => {
   const doc = new jsPDF();
   try {
     const results = await api('/api/classes/' + className + '/results');
-    const rows = results.map((r, idx) => [idx + 1, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
+    const rows = results.map((r, idx) => [idx + 1, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
     doc.text(className + " Sinf Natijalari", 14, 15);
-    doc.autoTable({ head: [['O\'rin', 'Jamoa', 'Ism', 'Ball', 'Vaqt']], body: rows, startY: 20, theme: 'grid' });
+    doc.autoTable({ head: [['O\'rin', 'Ism Familiya', 'Ball', 'Vaqt']], body: rows, startY: 20, theme: 'grid' });
     doc.save(`${className}_natijalari.pdf`);
   } catch (err) {
     alert("PDF yaratishda xatolik: " + err.message);
@@ -429,8 +427,8 @@ window.downloadAllResultsPDF = async () => {
         if (y > 240) { doc.addPage(); y = 20; }
         doc.setFontSize(14);
         doc.text(c.id + " Sinf Natijalari", 14, y);
-        const rows = results.map((r, idx) => [idx + 1, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
-        doc.autoTable({ head: [['O\'rin', 'Jamoa', 'Ism', 'Ball', 'Vaqt']], body: rows, startY: y + 2, theme: 'grid' });
+        const rows = results.map((r, idx) => [idx + 1, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
+        doc.autoTable({ head: [['O\'rin', 'Ism Familiya', 'Ball', 'Vaqt']], body: rows, startY: y + 2, theme: 'grid' });
         y = doc.lastAutoTable.finalY + 15;
       }
     }
@@ -468,11 +466,11 @@ window.downloadTop3PDF = async () => {
           if (idx === 0) medal = "1 (Oltin) ";
           if (idx === 1) medal = "2 (Kumush)";
           if (idx === 2) medal = "3 (Bronza)";
-          return [medal, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || ''];
+          return [medal, r.student_name, `${r.score}/${r.total}`, r.time_taken || ''];
         });
 
         doc.autoTable({ 
-          head: [['O\'rin', 'Jamoa', 'Ism', 'Ball', 'Vaqt']], 
+          head: [['O\'rin', 'Ism Familiya', 'Ball', 'Vaqt']], 
           body: rows, 
           startY: y + 3, 
           theme: 'striped',

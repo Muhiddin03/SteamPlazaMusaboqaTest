@@ -249,8 +249,9 @@ window.openAuth = async (id) => {
 
 // ─── TEST BOSHLASH ─────────────────────────────────────────────────────────────
 window.startQuiz = () => {
-  if (!document.getElementById('st-name').value || !document.getElementById('st-team').value) {
-    return alert("To'ldiring!");
+  // Jamoa nomi ixtiyoriy qilindi, faqat Ism kiritish majburiy
+  if (!document.getElementById('st-name').value.trim()) {
+    return alert("Iltimos, Ism Familiyangizni kiriting!");
   }
   document.getElementById('v-auth').classList.add('hidden');
   document.getElementById('v-quiz').classList.remove('hidden');
@@ -294,8 +295,11 @@ function renderQ() {
 
 // ─── TEST YAKUNLASH ────────────────────────────────────────────────────────────
 async function finish() {
-  const team = document.getElementById('st-team').value;
-  const name = document.getElementById('st-name').value;
+  let team = document.getElementById('st-team').value.trim();
+  const name = document.getElementById('st-name').value.trim();
+
+  // Agar jamoa kiritilmagan bo'lsa chiziqcha qo'yiladi
+  if (!team) team = "-";
 
   document.getElementById('f-team').innerText = team;
   document.getElementById('f-score').innerText = score;
@@ -403,6 +407,8 @@ window.downloadSinglePDF = async (className) => {
   try {
     const results = await api('/api/classes/' + className + '/results');
     const rows = results.map((r, idx) => [idx + 1, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
+    
+    // Sarlavha xavfsiz matnga o'tkazildi
     doc.text(className + " Sinf Natijalari", 14, 15);
     doc.autoTable({ head: [['O\'rin', 'Jamoa', 'Ism', 'Ball', 'Vaqt']], body: rows, startY: 20, theme: 'grid' });
     doc.save(`${className}_natijalari.pdf`);
@@ -448,7 +454,8 @@ window.downloadTop3PDF = async () => {
 
   try {
     const classes = allGlobalClasses.length > 0 ? allGlobalClasses : await api('/api/classes');
-    doc.setFontSize(18);
+    doc.setFontSize(16);
+    // Emojilar olib tashlandi, matn tozalandi
     doc.text("STEAM PLAZA - TOP-3 G'OLIBLAR (SINFLAR KESIMIDA)", 14, y);
     y += 12;
 
@@ -459,13 +466,13 @@ window.downloadTop3PDF = async () => {
       if (top3.length > 0) {
         if (y > 240) { doc.addPage(); y = 20; }
         doc.setFontSize(14);
-        doc.setTextColor(16, 185, 129); 
-        doc.text(`🏆 ${c.id} Sinf G'oliblari`, 14, y);
-        doc.setTextColor(0, 0, 0);
+        
+        // Tushunarsiz belgi chiqarmaslik uchun kubok belgisi olib tashlandi
+        doc.text(`${c.id} Sinf G'oliblari`, 14, y);
 
         const rows = top3.map((r, idx) => {
           let medal = idx + 1;
-          if (idx === 0) medal = "1 (Oltin) ";
+          if (idx === 0) medal = "1 (Oltin)";
           if (idx === 1) medal = "2 (Kumush)";
           if (idx === 2) medal = "3 (Bronza)";
           return [medal, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || ''];
@@ -476,7 +483,7 @@ window.downloadTop3PDF = async () => {
           body: rows, 
           startY: y + 3, 
           theme: 'striped',
-          headStyles: { fillColor: [16, 185, 129] }
+          headStyles: { fillColor: [16, 185, 129] } // Yashil sarlavha paneli
         });
         y = doc.lastAutoTable.finalY + 12;
       }

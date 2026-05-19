@@ -13,7 +13,7 @@
 
     <header class="header-nav">
         <div class="logo">STEAM <span>PLAZA</span></div>
-        <button class="btn admin-premium-btn" id="admin-login-btn" onclick="openLogin()" title="Admin boshqaruv paneli">
+        <button class="btn admin-premium-btn" id=\"admin-login-btn\" onclick="openLogin()" title="Admin boshqaruv paneli">
             <div class="icon-wrapper">
                 <i class="ri-settings-5-fill gear-icon"></i>
                 <i class="ri-lock-password-fill lock-icon"></i>
@@ -23,102 +23,114 @@
 
     <aside class="sidebar" id="admin-sidebar">
         <div class="hamburger" onclick="toggleSidebar()"><i class="ri-menu-2-fill"></i></div>
-        <div class="side-item active" onclick="switchTab('t-classes', this)"><i class="ri-grid-fill"></i> <span>Sinflar</span></div>
-        <div class="side-item" onclick="switchTab('t-tests', this)"><i class="ri-folder-add-fill"></i> <span>Testlar</span></div>
-        <div class="side-item" onclick="switchTab('t-results', this)"><i class="ri-line-chart-fill"></i> <span>Natijalar</span></div>
-        <div class="side-item" onclick="switchTab('t-settings', this)"><i class="ri-settings-4-fill"></i> <span>Sozlamalar</span></div>
-        <button class="btn btn-danger" style="margin-top:auto" onclick="location.reload()">
-            <i class="ri-logout-box-r-line"></i> <span class="logout-text">CHIQUVCHI</span>
-        </button>
+        <div class="side-item active" onclick="switchTab('t-classes', this)"><i class="ri-git-repository-line"></i> <span>Sinflar</span></div>
+        <div class="side-item" onclick="switchTab('t-tests', this)"><i class="ri-file-list-3-line"></i> <span>Testlar</span></div>
+        <div class="side-item" onclick="switchTab('t-results', this)"><i class="ri-trophy-line"></i> <span>Natijalar</span></div>
+        <div class="side-item" onclick="switchTab('t-settings', this)"><i class="ri-settings-4-line"></i> <span>Sozlamalar</span></div>
     </aside>
 
     <main class="main-content">
-        <div id="v-home" class="page-view">
-            <h1 style="margin-bottom:30px">Sinfni tanlang</h1>
-            <div id="st-grid" class="grid"></div>
+        <div id="v-home" class="view">
+            <h2 class="view-title">Sinfingizni tanlang</h2>
+            <div class="grid" id="st-grid"></div>
         </div>
 
-        <div id="v-auth" class="page-view hidden">
-            <div class="card" style="max-width:400px; margin: 40px auto; text-align:center">
-                <h2 id="sel-c-title" style="color:var(--primary)">Sinf</h2>
-                <input type="text" id="st-name" placeholder="Ism Familiya">
-                <input type="text" id="st-team" placeholder="Jamoa nomi">
-                <button class="btn btn-primary" style="width:100%; justify-content:center" onclick="startQuiz()">TESTNI BOSHLASH</button>
-                <button class="btn" style="width:100%; margin-top:10px; background:none; justify-content:center" onclick="goHome()">ORQAGA</button>
+        <div id="v-auth" class="view hidden">
+            <button class="btn btn-secondary" onclick="goHome()" style="margin-bottom:20px;"><i class="ri-arrow-left-line"></i> Orqaga</button>
+            <div class="card" style="max-width:400px; margin:0 auto; padding:30px;">
+                <h2 id="sel-c-title" style="margin-top:0; color:var(--primary)"></h2>
+                <p style="color:#64748b; margin-bottom:20px;">Testni boshlash uchun ism va familiyangizni kiriting:</p>
+                <input type="text" id="st-name" placeholder="Ism va Familiyangizni kiriting" style="margin-bottom:20px;">
+                <button class="btn btn-primary" style="width:100%" onclick="startQuiz()">TESTNI BOSHLASH</button>
             </div>
         </div>
 
-        <div id="v-quiz" class="page-view hidden">
-            <div class="card" style="max-width:800px; margin: 0 auto;">
-                <div id="q-text" style="font-size:24px; font-weight:800; margin-bottom:30px; border-left: 5px solid var(--primary); padding-left: 15px;"></div>
-                <div id="opt-box" style="display:grid; gap:15px;"></div>
+        <div id="v-quiz" class="view hidden">
+            <div class="card" style="max-width:600px; margin:0 auto;">
+                <h3 id="q-text" style="font-size:20px; margin-bottom:25px; line-height:1.5;"></h3>
+                <div id="opt-box" style="display:flex; flex-direction:column; gap:12px;"></div>
             </div>
         </div>
 
-        <div id="t-classes" class="tab-content">
-            <h1 style="margin-top:0">Sinflarni boshqarish</h1>
-            <div style="display:flex; gap:12px; margin-bottom:30px; max-width:500px">
-                <input type="text" id="new-c-input" placeholder="Yangi sinf nomi (Masalan: 1-A)" style="margin:0">
-                <button class="btn btn-primary" onclick="addClass()"><i class="ri-add-line"></i> QO'SHISH</button>
+        <div id="t-classes" class="tab-content active">
+            <h2 class="view-title">Sinflarni boshqarish</h2>
+            <div class="card" style="max-width:400px; margin-bottom:30px; display:flex; gap:10px;">
+                <input type="text" id="new-c-input" placeholder="Yangi sinf nomi (Masalan: 1-A)">
+                <button class="btn btn-primary" onclick="addClass()">Qo'shish</button>
             </div>
-            <div id="adm-grid" class="grid"></div>
+            <div class="grid" id="adm-grid"></div>
         </div>
 
         <div id="t-tests" class="tab-content">
-            <h1>Savollar bazasi</h1>
-            <div class="card" style="margin-bottom:30px">
-                <label style="font-weight: bold; display: block; margin-bottom: 5px;">Asosiy sinfni tanlang (Ko'rish uchun):</label>
-                <select id="adm-sel-c" onchange="loadTTable()"></select>
-                
-                <div id="bulk-classes-container" style="margin-bottom: 15px; background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0;">
-                    <span style="font-weight: bold; display: block; margin-bottom: 8px; font-size: 14px;">Ushbu test qaysi sinflarga ham qo'shilsin?</span>
-                    <div style="margin-bottom: 8px;">
-                        <button type="button" class="btn" style="padding: 4px 10px; font-size: 12px; background: #e2e8f0;" onclick="selectAllParallelClasses()">Shu paralleldagilarni tanlash</button>
-                        <button type="button" class="btn" style="padding: 4px 10px; font-size: 12px; background: #e2e8f0;" onclick="clearSelectionClasses()">Tozalash</button>
+            <h2 class="view-title">Test savollarini qo'shish</h2>
+            <div class="card" style="margin-bottom:30px;">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
+                    <div>
+                        <label>Asosiy Sinf:</label>
+                        <select id="adm-sel-c" onchange="loadTTable()"><option value="">Sinf tanlang</option></select>
                     </div>
-                    <div id="classes-checkbox-list" style="display: flex; flex-wrap: wrap; gap: 15px; padding-top: 5px;">
+                    <div style="display: flex; flex-direction: column; justify-content: flex-end;">
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-secondary" onclick="selectAllParallelClasses()" style="padding: 10px; font-size: 13px; flex: 1;">Parallel sinflarni belgilash</button>
+                            <button class="btn btn-secondary" onclick="clearSelectionClasses()" style="padding: 10px; font-size: 13px; background:#f1f5f9; color:#334155; flex: 1;">Tozalash</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="display:block; margin-bottom:8px; font-weight:bold;">Ushbu savol qo'shiladigan qo'shimcha parallel sinflarni tanlang:</label>
+                    <div id="classes-checkbox-list" style="display:flex; flex-wrap:wrap; gap:15px; background:#f8fafc; padding:15px; border-radius:12px; border:1px solid #e2e8f0;">
                         </div>
                 </div>
 
-                <input type="text" id="adm-q" placeholder="Savol matni">
-                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px;">
-                    <input type="text" id="adm-a" placeholder="To'g'ri javob" style="border-color:var(--primary)">
-                    <input type="text" id="adm-w1" placeholder="Xato 1">
-                    <input type="text" id="adm-w2" placeholder="Xato 2">
+                <label>Savol matni:</label>
+                <textarea id="adm-q" rows="3" placeholder="Savolni yozing..."></textarea>
+                
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; margin-top:15px; margin-bottom:20px;">
+                    <div>
+                        <label style="color:green; font-weight:bold;">To'g'ri javob:</label>
+                        <input type="text" id="adm-a" placeholder="To'g'ri javob">
+                    </div>
+                    <div>
+                        <label style="color:red;">Noto'g'ri javob 1:</label>
+                        <input type="text" id="adm-w1" placeholder="Noto'g'ri javob 1">
+                    </div>
+                    <div>
+                        <label style="color:red;">Noto'g'ri javob 2:</label>
+                        <input type="text" id="adm-w2" placeholder="Noto'g'ri javob 2">
+                    </div>
                 </div>
-                <button class="btn btn-primary" style="margin-top: 15px;" onclick="saveTest()"><i class="ri-save-line"></i> SAQLASH</button>
+                <button class="btn btn-primary" onclick="saveTest()">SAVOLNI SAQLASH</button>
             </div>
-            <div id="adm-t-list" class="grid"></div>
+            
+            <h3 class="view-title" style="font-size:18px;">Mavjud savollar ro'yxati</h3>
+            <div id="adm-t-list"></div>
         </div>
 
         <div id="t-results" class="tab-content">
-            <div style="margin-bottom: 20px; display: flex; gap: 15px;">
-                <button class="btn btn-primary" onclick="downloadAllResultsPDF()">
-                    <i class="ri-file-pdf-line"></i> BARCHA NATIJALAR (PDF)
-                </button>
-                <button class="btn" style="background: #eab308; color: white;" onclick="downloadTop3PDF()">
-                    <i class="ri-trophy-line"></i> FAQAT TOP-3 GO'LIBLAR (PDF)
-                </button>
-            </div>
+            <h2 class="view-title">Test Natijalari</h2>
+            
             <div id="res-grid" class="grid"></div>
+
             <div id="res-detail" class="hidden">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <button class="btn" style="background:#e2e8f0" onclick="closeRes()">← ORQAGA</button>
-                    <button class="btn btn-primary" id="pdf-single-btn">
-                        <i class="ri-download-2-line"></i> PDF YUKLASH
-                    </button>
+                    <button class="btn btn-secondary" onclick="closeRes()"><i class="ri-arrow-left-line"></i> Orqaga</button>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn btn-primary" id="pdf-single-btn" style="background:#2563eb"><i class="ri-file-pdf-line"></i> PDF Yuklash</button>
+                        <button class="btn btn-primary" onclick="downloadTop3PDF()" style="background:#16a34a"><i class="ri-medal-line"></i> Top-3 G'oliblar PDF</button>
+                        <button class="btn btn-secondary" onclick="downloadAllResultsPDF()"><i class="ri-global-line"></i> Barcha sinflar PDF</button>
+                    </div>
                 </div>
-                <div class="card" style="padding:0; overflow:hidden">
-                    <h2 id="res-c-name" style="padding:20px; margin:0; background:#f8fafc; border-bottom:1px solid #e2e8f0">Natijalar</h2>
-                    <table style="width:100%; border-collapse:collapse" id="results-table-pdf">
-                        <thead style="background:#f1f5f9">
-                            <tr>
-                                <th style="padding:15px; text-align:left; width: 80px;">O'rin</th>
-                                <th style="padding:15px; text-align:left">Jamoa</th>
-                                <th style="padding:15px; text-align:left">Ism</th>
-                                <th style="padding:15px; text-align:left">Ball</th>
-                                <th style="padding:15px; text-align:left">Vaqt</th>
-                                <th style="padding:15px; text-align:right">Amal</th>
+                <h3 id="res-c-name" style="margin-bottom:15px; color:var(--dark)"></h3>
+                <div class="card" style="padding:0; overflow:hidden;">
+                    <table style="width:100%; border-collapse:collapse; text-align:left;">
+                        <thead>
+                            <tr style="background:#f8fafc; border-bottom:2px solid #e2e8f0">
+                                <th style="padding:15px; width:80px;">O'rin</th>
+                                <th style="padding:15px;">O'quvchi Ismi va Familiyasi</th>
+                                <th style="padding:15px;">To'g'ri javoblar</th>
+                                <th style="padding:15px;">Sana / Vaqt</th>
+                                <th style="padding:15px; text-align:right; width:80px;">Amal</th>
                             </tr>
                         </thead>
                         <tbody id="res-tbody"></tbody>
@@ -128,9 +140,9 @@
         </div>
 
         <div id="t-settings" class="tab-content">
-            <h1>Tizim sozlamalari</h1>
-            <div class="card" style="border: 2px dashed #f87171; background:#fef2f2">
-                <h3 style="color:#ef4444">Bazani butunlay tozalash</h3>
+            <h2 class="view-title">Tizim Sozlamalari</h2>
+            <div class="card" style="border: 1px solid #fee2e2; background: #fff5f5;">
+                <h3 style="color:#dc2626; margin-top:0;">Butunlay tozalash</h3>
                 <p>Ushbu amal barcha testlar, sinflar va natijalarni o'chirib yuboradi.</p>
                 <button class="btn btn-danger" onclick="clearDb()"><i class="ri-delete-bin-2-line"></i> BARCHASINI O'CHIRISH</button>
             </div>
@@ -142,7 +154,7 @@
             <h3>Admin Kirish</h3>
             <input type="password" id="adm-pass" placeholder="Parolni kiriting">
             <button class="btn btn-primary" style="width:100%" onclick="verifyAdmin()">KIRISH</button>
-            <p onclick="closeM('m-login')" style="cursor:pointer; margin-top:20px; color:#64748b">Yopish</p>
+            <p onclick=\"closeM('m-login')\" style="cursor:pointer; margin-top:20px; color:#64748b">Yopish</p>
         </div>
     </div>
 
@@ -151,14 +163,13 @@
             <div style="font-size:50px; color:var(--primary); margin-bottom:10px;"><i class="ri-checkbox-circle-fill"></i></div>
             <h2 style="margin:0">Test Yakunlandi!</h2>
             <div style="background:#f1f5f9; padding:20px; border-radius:20px; margin:25px 0; text-align:left;">
-                <p>Jamoa: <b id="f-team"></b></p>
-                <p>To'g'ri: <b style="color:green" id="f-score">0</b></p>
-                <p>Xato: <b style="color:red" id="f-wrong">0</b></p>
+                <p>O'quvchi: <b id="f-name"></b></p>
+                <p>To'g'ri javoblar: <b id="f-score" style="color:green"></b> ta</p>
+                <p>Xato javoblar: <b id="f-wrong" style="color:red"></b> ta</p>
             </div>
-            <button class="btn btn-primary" style="width:100%" onclick="location.reload()">BOSH SAHIFA</button>
+            <button class="btn btn-primary" style="width:100%" onclick="location.reload()">BOSH SAHIFAGA QAYTISH</button>
         </div>
     </div>
 
-    <script src="script.js"></script>
 </body>
 </html>

@@ -13,7 +13,7 @@
 
     <header class="header-nav">
         <div class="logo">STEAM <span>PLAZA</span></div>
-        <button class="btn admin-premium-btn" id=\"admin-login-btn\" onclick="openLogin()" title="Admin boshqaruv paneli">
+        <button class="btn admin-premium-btn" id="admin-login-btn" onclick="openLogin()" title="Admin boshqaruv paneli">
             <div class="icon-wrapper">
                 <i class="ri-settings-5-fill gear-icon"></i>
                 <i class="ri-lock-password-fill lock-icon"></i>
@@ -127,8 +127,9 @@
                         <thead>
                             <tr style="background:#f8fafc; border-bottom:2px solid #e2e8f0">
                                 <th style="padding:15px; width:80px;">O'rin</th>
-                                <th style="padding:15px;">O'quvchi Ismi va Familiyasi</th>
-                                <th style="padding:15px;">To'g'ri javoblar</th>
+                                <th style="padding:15px;">Jamoa</th>
+                                <th style="padding:15px;">O'quvchi Ismi</th>
+                                <th style="padding:15px;">Ball</th>
                                 <th style="padding:15px;">Sana / Vaqt</th>
                                 <th style="padding:15px; text-align:right; width:80px;">Amal</th>
                             </tr>
@@ -154,7 +155,7 @@
             <h3>Admin Kirish</h3>
             <input type="password" id="adm-pass" placeholder="Parolni kiriting">
             <button class="btn btn-primary" style="width:100%" onclick="verifyAdmin()">KIRISH</button>
-            <p onclick=\"closeM('m-login')\" style="cursor:pointer; margin-top:20px; color:#64748b">Yopish</p>
+            <p onclick="closeM('m-login')" style="cursor:pointer; margin-top:20px; color:#64748b">Yopish</p>
         </div>
     </div>
 
@@ -163,6 +164,7 @@
             <div style="font-size:50px; color:var(--primary); margin-bottom:10px;"><i class="ri-checkbox-circle-fill"></i></div>
             <h2 style="margin:0">Test Yakunlandi!</h2>
             <div style="background:#f1f5f9; padding:20px; border-radius:20px; margin:25px 0; text-align:left;">
+                <p>Jamoa: <b id="f-team"></b></p>
                 <p>O'quvchi: <b id="f-name"></b></p>
                 <p>To'g'ri javoblar: <b id="f-score" style="color:green"></b> ta</p>
                 <p>Xato javoblar: <b id="f-wrong" style="color:red"></b> ta</p>

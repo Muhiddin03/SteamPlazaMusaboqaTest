@@ -1,6 +1,6 @@
 // ─── API URL - Railway deploy qilgandan keyin shu yerga o'z URL'ingizni yozing ───
 // Masalan: const API = "https://steam-plaza-backend.up.railway.app";
-const API = "steamplazamusaboqatestbackend-production.up.railway.app";  // <-- BU YERGA O'Z URL'INGIZNI YOZING
+const API = "https://steamplazamusaboqatestbackend-production.up.railway.app";  // <-- BU YERGA O'Z URL'INGIZNI YOZING
 
 // ─── STATE ─────────────────────────────────────────────────────────────────────
 let curClass = "";

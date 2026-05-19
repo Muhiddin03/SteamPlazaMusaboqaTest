@@ -247,10 +247,10 @@ window.openAuth = async (id) => {
   }
 };
 
-// ─── TEST BOSHLASH (Faqat ismni tekshiradi) ──────────────────────────────────
+// ─── TEST BOSHLASH ─────────────────────────────────────────────────────────────
 window.startQuiz = () => {
-  if (!document.getElementById('st-name').value.trim()) {
-    return alert("Iltimos, ism va familiyangizni kiriting!");
+  if (!document.getElementById('st-name').value || !document.getElementById('st-team').value) {
+    return alert("To'ldiring!");
   }
   document.getElementById('v-auth').classList.add('hidden');
   document.getElementById('v-quiz').classList.remove('hidden');
@@ -292,13 +292,12 @@ function renderQ() {
     });
 }
 
-// ─── TEST YAKUNLASH (Jamoaga avtomatik "Yakka" yuboriladi) ────────────────────
+// ─── TEST YAKUNLASH ────────────────────────────────────────────────────────────
 async function finish() {
-  const name = document.getElementById('st-name').value.trim();
-  const autoTeam = "Yakka"; 
+  const team = document.getElementById('st-team').value;
+  const name = document.getElementById('st-name').value;
 
-  document.getElementById('f-team').innerText = autoTeam;
-  document.getElementById('f-name').innerText = name;
+  document.getElementById('f-team').innerText = team;
   document.getElementById('f-score').innerText = score;
   document.getElementById('f-wrong').innerText = tList.length - score;
   document.getElementById('m-finish').classList.add('active');
@@ -306,7 +305,7 @@ async function finish() {
   try {
     await api('/api/results', 'POST', {
       class_id: curClass,
-      team_name: autoTeam,
+      team_name: team,
       student_name: name,
       score,
       total: tList.length,

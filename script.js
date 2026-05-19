@@ -1,12 +1,12 @@
-// ─── API URL - Railway deploy qilgandan keyin shu yerga o'z URL'ingizni yozing ───
-const API = "https://steamplazamusaboqatestbackend-production.up.railway.app";  // <-- BU YERGA O'Z URL'INGIZNI YOZING
+// ─── API URL - Yangi Railway URL manzilingiz ───
+const API = "https://steamplazamusaboqatestbackend-production.up.railway.app";
 
 // ─── STATE ─────────────────────────────────────────────────────────────────────
 let curClass = "";
 let tList = [];
 let qIdx = 0;
 let score = 0;
-let allGlobalClasses = []; // Barcha sinflarni keshda saqlash
+let allGlobalClasses = []; 
 
 // ─── HELPER: API CALL ──────────────────────────────────────────────────────────
 async function api(path, method = 'GET', body = null) {
@@ -75,7 +75,7 @@ async function loadData() {
 
   try {
     const classes = await api('/api/classes');
-    allGlobalClasses = classes; // Keshga saqlaymiz
+    allGlobalClasses = classes; 
 
     sg.innerHTML = "";
     ag.innerHTML = "";
@@ -165,7 +165,6 @@ window.saveTest = async () => {
 
   if (!classId || !question || !correct_answer) return alert("To'ldiring!");
 
-  // Qo'shimcha tanlangan parallel sinflarni yig'amiz
   const checkboxes = document.querySelectorAll('input[name="target_classes"]:checked');
   const targetClasses = [classId];
   checkboxes.forEach(cb => {
@@ -232,20 +231,19 @@ window.openAuth = async (id) => {
   curClass = id;
 
   try {
-    // Sinf nomi yoki parallel bo'yicha bazadan random testlarni olamiz
     const tests = await api('/api/grade/' + id + '/tests');
 
     if (tests.length === 0) {
-      return alert(id + " sinfi uchun test yuklanmagan!");
+      return alert(id + " sinfi guruhiga tegishli umumiy parallel yoki maxsus test yuklanmagan!");
     }
 
-    tList = tests; // Backend o'zi random beradi, xohlasangiz yana aralashtiramiz: .sort(() => Math.random() - 0.5)
+    tList = tests; 
 
     document.getElementById('sel-c-title').innerText = id;
     document.getElementById('v-home').classList.add('hidden');
     document.getElementById('v-auth').classList.remove('hidden');
   } catch (err) {
-    alert("Xatolik: " + err.message);
+    alert("Serverdan ma'lumot olishda xatolik: " + err.message);
   }
 };
 
@@ -333,7 +331,7 @@ window.loadResGrid = async () => {
   }
 };
 
-// ─── SINF NATIJALARINI OCHISH (Top-3 rangli va saralangan holatda) ──────────────
+// ─── SINF NATIJALARINI OCHISH ──────────────────────────────────────────────────
 window.openRes = async (id) => {
   document.getElementById('res-grid').classList.add('hidden');
   document.getElementById('res-detail').classList.remove('hidden');
@@ -356,15 +354,14 @@ window.openRes = async (id) => {
       let badgeStyle = "";
       let placeLabel = idx + 1;
 
-      // 1, 2, 3-o'rinlarni ranglar bilan ajratish
       if (idx === 0) {
-        badgeStyle = "background-color: #fef08a; color: #854d0e; font-weight: 900; border-radius: 6px; padding: 4px 8px;"; // Oltin
+        badgeStyle = "background-color: #fef08a; color: #854d0e; font-weight: 900; border-radius: 6px; padding: 4px 8px;"; 
         placeLabel = "🥇 1";
       } else if (idx === 1) {
-        badgeStyle = "background-color: #e2e8f0; color: #334155; font-weight: 900; border-radius: 6px; padding: 4px 8px;"; // Kumush
+        badgeStyle = "background-color: #e2e8f0; color: #334155; font-weight: 900; border-radius: 6px; padding: 4px 8px;"; 
         placeLabel = "🥈 2";
       } else if (idx === 2) {
-        badgeStyle = "background-color: #ffedd5; color: #c2410c; font-weight: 900; border-radius: 6px; padding: 4px 8px;"; // Bronza
+        badgeStyle = "background-color: #ffedd5; color: #c2410c; font-weight: 900; border-radius: 6px; padding: 4px 8px;"; 
         placeLabel = "🥉 3";
       }
 
@@ -414,7 +411,7 @@ window.downloadSinglePDF = async (className) => {
   }
 };
 
-// ─── PDF: BARCHA NATIJALAR (TO'LIQ RO'YXAT) ───────────────────────────────────
+// ─── PDF: BARCHA NATIJALAR ────────────────────────────────────────────────────
 window.downloadAllResultsPDF = async () => {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
@@ -443,7 +440,7 @@ window.downloadAllResultsPDF = async () => {
   }
 };
 
-// ─── PDF: FAQAT HAR BIR SINFDAN TOP-3 GO'LIBLAR KESIMIDA ───────────────────────
+// ─── PDF: FAQAT TOP-3 GO'LIBLAR ───────────────────────────────────────────────
 window.downloadTop3PDF = async () => {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
@@ -457,13 +454,12 @@ window.downloadTop3PDF = async () => {
 
     for (const c of classes) {
       const results = await api('/api/classes/' + c.id + '/results');
-      // Faqat birinchi 3 ta o'rinni qirqib olamiz
       const top3 = results.slice(0, 3);
       
       if (top3.length > 0) {
         if (y > 240) { doc.addPage(); y = 20; }
         doc.setFontSize(14);
-        doc.setTextColor(16, 185, 129); // Chiroyli yashil rang sarlavha uchun
+        doc.setTextColor(16, 185, 129); 
         doc.text(`🏆 ${c.id} Sinf G'oliblari`, 14, y);
         doc.setTextColor(0, 0, 0);
 

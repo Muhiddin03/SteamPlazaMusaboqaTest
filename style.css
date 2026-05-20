@@ -174,54 +174,193 @@ input:focus { border-color: var(--primary); }
 @keyframes pop { from { transform: scale(0.8); } to { transform: scale(1); } }
 .hidden { display: none !important; }
 
+/* ═══════════════════════════════════════════════════════════════════ */
+/* TEST ITEM ROW - TAHRIRLASH VA O'CHIRISH DUMALOQ TUGMALARI */
+/* ═══════════════════════════════════════════════════════════════════ */
+
 .test-item-row {
     position: relative;
     overflow: visible !important;
-}
-
-.delete-q-btn {
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    width: 24px;
-    height: 24px;
-    background: #ef4444;
-    color: white;
-    border-radius: 50%;
+    background: white;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
     align-items: center;
-    cursor: pointer;
-    border: 2px solid white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    z-index: 5;
-    font-size: 14px;
-    transition: 0.2s;
+    transition: all 0.3s ease;
 }
 
-.delete-q-btn:hover {
-    background: #dc2626;
-    transform: scale(1.2);
+.test-item-row:hover {
+    border-color: #10b981;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
 }
+
+.test-content {
+    flex: 1;
+    padding-right: 15px;
+}
+
+.test-content b {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 15px;
+    color: var(--dark);
+}
+
+.test-content span {
+    color: var(--primary);
+    font-weight: 600;
+    font-size: 14px;
+}
+
+/* Tahrirlash va O'chirish tugmalari konteyner */
+.test-action-buttons {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    align-items: center;
+}
+
+/* Dumaloq tugmalar (Tahrirlash va O'chirish) */
+.btn-edit-test, .btn-delete-test {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0 !important;
+    border-radius: 50%;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    gap: 0 !important;
+}
+
+/* Tahrirlash tugmasi - Maviy */
+.btn-edit-test {
+    background: linear-gradient(145deg, #2563eb, #1d4ed8);
+    color: white;
+}
+
+.btn-edit-test:hover {
+    background: linear-gradient(145deg, #1d4ed8, #1e40af);
+    transform: scale(1.15) rotate(5deg);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+}
+
+.btn-edit-test:active {
+    transform: scale(0.9);
+}
+
+/* O'chirish tugmasi - Qizil */
+.btn-delete-test {
+    background: linear-gradient(145deg, #ef4444, #dc2626);
+    color: white;
+}
+
+.btn-delete-test:hover {
+    background: linear-gradient(145deg, #dc2626, #b91c1c);
+    transform: scale(1.15) rotate(-5deg);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.btn-delete-test:active {
+    transform: scale(0.9);
+}
+
+/* Icon larining o'lchamlari */
+.btn-edit-test i, .btn-delete-test i {
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ═══════════════════════════════════════════════════════════════════ */
+/* NATIJA O'CHIRISH DUMALOQ TUGMASI */
+/* ═══════════════════════════════════════════════════════════════════ */
 
 .res-del-btn {
-    width: 30px !important;
-    height: 30px !important;
-    min-width: 30px !important;
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
     padding: 0 !important;
     border-radius: 50% !important;
     display: inline-flex !important;
     align-items: center;
     justify-content: center;
-    background-color: #ef4444;
+    background: linear-gradient(145deg, #ef4444, #dc2626);
     color: white;
     border: none;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 16px;
     line-height: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    gap: 0 !important;
 }
 
 .res-del-btn:hover {
-    background-color: #dc2626;
-    transform: scale(1.1);
+    background: linear-gradient(145deg, #dc2626, #b91c1c);
+    transform: scale(1.2) rotate(10deg);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.res-del-btn:active {
+    transform: scale(0.85);
+}
+
+/* ═══════════════════════════════════════════════════════════════════ */
+/* RESPONSIVE DESIGN */
+/* ═══════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+    .sidebar {
+        position: fixed;
+        left: -260px;
+        height: 100vh;
+        z-index: 400;
+    }
+    
+    .sidebar.active {
+        left: 0;
+    }
+    
+    .test-item-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .test-action-buttons {
+        width: 100%;
+        margin-top: 10px;
+        justify-content: flex-start;
+    }
+    
+    .test-content {
+        padding-right: 0;
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .btn-edit-test, .btn-delete-test {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        min-height: 32px;
+        font-size: 14px;
+    }
+    
+    .grid {
+        grid-template-columns: 1fr;
+    }
 }

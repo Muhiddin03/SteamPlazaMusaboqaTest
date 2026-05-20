@@ -61,7 +61,9 @@ window.switchTab = (id, el) => {
   document.querySelectorAll('.side-item').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   el.classList.add('active');
+  
   if (id === 't-results') loadResGrid();
+  if (id === 't-all-tests-view') loadAllGlobalTestsTable(); // Barcha testlar tabiga o'tganda yuklash
 };
 
 // ─── LOAD DATA (Sinflar ro'yxati) ─────────────────────────────────────────────
@@ -69,6 +71,7 @@ async function loadData() {
   const sg = document.getElementById('st-grid');
   const ag = document.getElementById('adm-grid');
   const sel = document.getElementById('adm-sel-c');
+  const editSel = document.getElementById('edit-q-class'); // Tahrirlash modalidagi select
   const chkBoxList = document.getElementById('classes-checkbox-list');
 
   sg.innerHTML = "<p>Yuklanmoqda...</p>";
@@ -80,6 +83,7 @@ async function loadData() {
     sg.innerHTML = "";
     ag.innerHTML = "";
     sel.innerHTML = "<option value=''>Sinf tanlang</option>";
+    if(editSel) editSel.innerHTML = "";
     if(chkBoxList) chkBoxList.innerHTML = "";
 
     if (classes.length === 0) {
@@ -94,6 +98,7 @@ async function loadData() {
           <i class="ri-delete-bin-line icon-btn" onclick="delClass('${c.id}')" style="cursor:pointer; color:red"></i>
         </div>`;
       sel.innerHTML += `<option value="${c.id}">${c.id}</option>`;
+      if(editSel) editSel.innerHTML += `<option value="${c.id}">${c.id}</option>`;
       
       if(chkBoxList) {
         chkBoxList.innerHTML += `
@@ -221,8 +226,118 @@ window.delT = async (testId) => {
   try {
     await api('/api/tests/' + testId, 'DELETE');
     loadTTable();
+    // Agar umumiy ro'yxat ochiq bo'lsa, u yerda ham yangilaymiz
+    if(document.getElementById('t-all-tests-view').classList.contains('active')) {
+      loadAllGlobalTestsTable();
+    }
   } catch (err) {
     alert("Xatolik: " + err.message);
+  }
+};
+
+// ─── BARCHA TUZILGAN SAVOLLARNI YUKLASH VA TAHRIRLASH PANELI (Yangi qo'shilgan 🛠️) ───
+async function loadAllGlobalTestsTable() {
+  const tbody = document.getElementById('all-tests-tbody');
+  if(!tbody) return;
+  
+  tbody.innerHTML = "<tr><td colspan='5' style='text-align:center; padding:20px;'>Yuklanmoqda...</td></tr>";
+  
+  try {
+    const tests = await api('/api/tests');
+    tbody.innerHTML = "";
+    
+    if(tests.length === 0) {
+      tbody.innerHTML = "<tr><td colspan='5' style='text-align:center; padding:20px; color:#64748b'>Tizimda hali birorta ham test yaratilmagan.</td></tr>";
+      return;
+    }
+    
+    tests.forEach((t, idx) => {
+      let options = [];
+      try {
+        options = typeof t.options === 'string' ? JSON.parse(t.options) : t.options;
+      } catch (e) {
+        options = [t.correct_answer];
+      }
+      
+      // Xato variantlarni ajratib olish
+      const wrongOpts = options.filter(o => o !== t.correct_answer);
+      const w1 = wrongOpts[0] || '';
+      const w2 = wrongOpts[1] || '';
+      
+      tbody.innerHTML += `
+        <tr style="border-bottom:1px solid #e2e8f0">
+          <td style="padding:12px; text-align:center">${idx + 1}</td>
+          <td style="padding:12px; text-align:center"><span style="background:#e0f2fe; color:#0369a1; padding:3px 8px; border-radius:6px; font-weight:bold; font-size:13px">${t.class_id}</span></td>
+          <td style="padding:12px; max-width:350px; word-wrap:break-word">
+            <div style="font-weight:600; margin-bottom:4px">${t.question}</div>
+            <div style="font-size:12px; color:#10b981"><b>To'g'ri:</b> ${t.correct_answer}</div>
+            ${w1 ? `<div style="font-size:12px; color:#ef4444"><b>Xato 1:</b> ${w1}</div>` : ''}
+            ${w2 ? `<div style="font-size:12px; color:#ef4444"><b>Xato 2:</b> ${w2}</div>` : ''}
+          </td>
+          <td style="padding:12px; text-align:center"><small style="color:#94a3b8">${new Date(t.created_at).toLocaleDateString('uz-UZ')}</small></td>
+          <td style="padding:12px; text-align:center">
+            <div style="display:flex; gap:8px; justify-content:center">
+              <button class="btn" style="background:#f1f5f9; color:#334155; padding:6px 10px; font-size:13px" onclick="openEditTestModal(${t.id}, '${t.class_id}', \`${t.question.replace(/`/g, '\\`').replace(/"/g, '&quot;')}\`, \`${t.correct_answer.replace(/`/g, '\\`').replace(/"/g, '&quot;')}\`, \`${w1.replace(/`/g, '\\`').replace(/"/g, '&quot;')}\`, \`${w2.replace(/`/g, '\\`').replace(/"/g, '&quot;')}\`)">
+                <i class="ri-edit-box-line"></i>
+              </button>
+              <button class="btn btn-danger" style="padding:6px 10px; font-size:13px" onclick="delGlobalTest(${t.id})">
+                <i class="ri-delete-bin-line"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    });
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan='5' style='color:red; padding:20px; text-align:center'>Xatolik: ${err.message}</td></tr>`;
+  }
+}
+
+// Global ro'yxatdan o'chirish yordamchisi
+window.delGlobalTest = async (id) => {
+  if (confirm("Ushbu test butunlay o'chirilsinmi?")) {
+    try {
+      await api('/api/tests/' + id, 'DELETE');
+      loadAllGlobalTestsTable();
+    } catch (err) {
+      alert("Xatolik: " + err.message);
+    }
+  }
+};
+
+// Tahrirlash modal oynasini ochish va ma'lumotlarni to'ldirish
+window.openEditTestModal = (id, classId, question, correct, w1, w2) => {
+  document.getElementById('edit-q-id').value = id;
+  document.getElementById('edit-q-class').value = classId;
+  document.getElementById('edit-q-text').value = question;
+  document.getElementById('edit-q-correct').value = correct;
+  document.getElementById('edit-q-w1').value = w1;
+  document.getElementById('edit-q-w2').value = w2;
+  
+  document.getElementById('m-edit-test').classList.add('active');
+};
+
+// Tahrirlangan testni saqlash (PUT so'rovi)
+window.saveEditedTest = async () => {
+  const id = document.getElementById('edit-q-id').value;
+  const class_id = document.getElementById('edit-q-class').value;
+  const question = document.getElementById('edit-q-text').value.trim();
+  const correct_answer = document.getElementById('edit-q-correct').value.trim();
+  const wrong1 = document.getElementById('edit-q-w1').value.trim();
+  const wrong2 = document.getElementById('edit-q-w2').value.trim();
+
+  if(!class_id || !question || !correct_answer) {
+    return alert("Sinf, savol matni va to'g'ri javob kiritilishi shart!");
+  }
+
+  try {
+    await api('/api/tests/' + id, 'PUT', {
+      class_id, question, correct_answer, wrong1, wrong2
+    });
+    closeM('m-edit-test');
+    loadAllGlobalTestsTable();
+  } catch (err) {
+    alert("O'zgarishlarni saqlashda xatolik: " + err.message);
   }
 };
 
@@ -249,8 +364,8 @@ window.openAuth = async (id) => {
 
 // ─── TEST BOSHLASH ─────────────────────────────────────────────────────────────
 window.startQuiz = () => {
-  if (!document.getElementById('st-name').value.trim()) {
-    return alert("Iltimos, Ism Familiyangizni kiriting!");
+  if (!document.getElementById('st-name').value || !document.getElementById('st-team').value) {
+    return alert("To'ldiring!");
   }
   document.getElementById('v-auth').classList.add('hidden');
   document.getElementById('v-quiz').classList.remove('hidden');
@@ -294,10 +409,8 @@ function renderQ() {
 
 // ─── TEST YAKUNLASH ────────────────────────────────────────────────────────────
 async function finish() {
-  let team = document.getElementById('st-team').value.trim();
-  const name = document.getElementById('st-name').value.trim();
-
-  if (!team) team = "-";
+  const team = document.getElementById('st-team').value;
+  const name = document.getElementById('st-name').value;
 
   document.getElementById('f-team').innerText = team;
   document.getElementById('f-score').innerText = score;
@@ -405,7 +518,6 @@ window.downloadSinglePDF = async (className) => {
   try {
     const results = await api('/api/classes/' + className + '/results');
     const rows = results.map((r, idx) => [idx + 1, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
-    
     doc.text(className + " Sinf Natijalari", 14, 15);
     doc.autoTable({ head: [['O\'rin', 'Jamoa', 'Ism', 'Ball', 'Vaqt']], body: rows, startY: 20, theme: 'grid' });
     doc.save(`${className}_natijalari.pdf`);
@@ -427,12 +539,12 @@ window.downloadAllResultsPDF = async () => {
     y += 10;
 
     for (const c of classes) {
-      const results = await api('/api/classes/' + c.id + '/results');
-      if (results.length > 0) {
+      const Math_results = await api('/api/classes/' + c.id + '/results');
+      if (Math_results.length > 0) {
         if (y > 240) { doc.addPage(); y = 20; }
         doc.setFontSize(14);
         doc.text(c.id + " Sinf Natijalari", 14, y);
-        const rows = results.map((r, idx) => [idx + 1, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
+        const rows = Math_results.map((r, idx) => [idx + 1, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
         doc.autoTable({ head: [['O\'rin', 'Jamoa', 'Ism', 'Ball', 'Vaqt']], body: rows, startY: y + 2, theme: 'grid' });
         y = doc.lastAutoTable.finalY + 15;
       }
@@ -451,7 +563,7 @@ window.downloadTop3PDF = async () => {
 
   try {
     const classes = allGlobalClasses.length > 0 ? allGlobalClasses : await api('/api/classes');
-    doc.setFontSize(16);
+    doc.setFontSize(18);
     doc.text("STEAM PLAZA - TOP-3 G'OLIBLAR (SINFLAR KESIMIDA)", 14, y);
     y += 12;
 
@@ -462,11 +574,13 @@ window.downloadTop3PDF = async () => {
       if (top3.length > 0) {
         if (y > 240) { doc.addPage(); y = 20; }
         doc.setFontSize(14);
-        doc.text(`${c.id} Sinf G'oliblari`, 14, y);
+        doc.setTextColor(16, 185, 129); 
+        doc.text(`🏆 ${c.id} Sinf G'oliblari`, 14, y);
+        doc.setTextColor(0, 0, 0);
 
         const rows = top3.map((r, idx) => {
           let medal = idx + 1;
-          if (idx === 0) medal = "1 (Oltin)";
+          if (idx === 0) medal = "1 (Oltin) ";
           if (idx === 1) medal = "2 (Kumush)";
           if (idx === 2) medal = "3 (Bronza)";
           return [medal, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || ''];

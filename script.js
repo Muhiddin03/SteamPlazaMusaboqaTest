@@ -1,17 +1,4 @@
-// ─── UI GLOBAL FUNKSIYALARNI WINDOW'GA BOG'LASH (ReferenceError oldini olish uchun eng tepada) ───
-window.toggleSidebar = () => document.getElementById('admin-sidebar').classList.toggle('collapsed');
-window.openLogin = () => document.getElementById('m-login').classList.add('active');
-window.closeM = (id) => document.getElementById(id).classList.remove('active');
-window.goHome = () => {
-  document.getElementById('v-home').classList.remove('hidden');
-  document.getElementById('v-auth').classList.add('hidden');
-};
-window.closeRes = () => {
-  document.getElementById('res-grid').classList.remove('hidden');
-  document.getElementById('res-detail').classList.add('hidden');
-};
-
-// ─── API URL ───
+// ─── API URL - Railway URL manzilingiz ───
 const API = "https://steamplazamusaboqatestbackend-production.up.railway.app";
 
 // ─── STATE ─────────────────────────────────────────────────────────────────────
@@ -42,9 +29,21 @@ function getGrade(name) {
   return name.split('-')[0];
 }
 
+// ─── UI HELPERS ────────────────────────────────────────────────────────────────
+window.toggleSidebar = () => document.getElementById('admin-sidebar').classList.toggle('collapsed');
+window.openLogin = () => document.getElementById('m-login').classList.add('active');
+window.closeM = (id) => document.getElementById(id).classList.remove('active');
+window.goHome = () => {
+  document.getElementById('v-home').classList.remove('hidden');
+  document.getElementById('v-auth').classList.add('hidden');
+};
+window.closeRes = () => {
+  document.getElementById('res-grid').classList.remove('hidden');
+  document.getElementById('res-detail').classList.add('hidden');
+};
+
 // ─── ADMIN LOGIN ───────────────────────────────────────────────────────────────
-window.verifyAdmin = (event) => {
-  if (event) event.preventDefault(); // Form yuborilishini to'xtatish
+window.verifyAdmin = () => {
   if (document.getElementById('adm-pass').value === "1234") {
     document.getElementById('v-home').classList.add('hidden');
     document.getElementById('m-login').classList.remove('active');
@@ -73,48 +72,29 @@ async function loadData() {
   const sel = document.getElementById('adm-sel-c');
   const chkBoxList = document.getElementById('classes-checkbox-list');
 
-  if(sg) sg.innerHTML = "<p>Yuklanmoqda...</p>";
+  sg.innerHTML = "<p>Yuklanmoqda...</p>";
 
   try {
     const classes = await api('/api/classes');
     allGlobalClasses = classes; 
 
-    if(sg) sg.innerHTML = "";
-    if(ag) ag.innerHTML = "";
-    if(sel) sel.innerHTML = "<option value=''>Sinf tanlang</option>";
+    sg.innerHTML = "";
+    ag.innerHTML = "";
+    sel.innerHTML = "<option value=''>Sinf tanlang</option>";
     if(chkBoxList) chkBoxList.innerHTML = "";
 
     if (classes.length === 0) {
-      if(sg) sg.innerHTML = "<p style='color:#64748b'>Hech qanday sinf yo'q</p>";
+      sg.innerHTML = "<p style='color:#64748b'>Hech qanday sinf yo'q</p>";
     }
 
     classes.forEach(c => {
-      if(sg) {
-        const studentCard = document.createElement('div');
-        studentCard.className = "card";
-        studentCard.innerHTML = `<h3>${c.id}</h3>`;
-        studentCard.addEventListener('click', () => window.openAuth(c.id));
-        sg.appendChild(studentCard);
-      }
-
-      if(ag) {
-        const adminCard = document.createElement('div');
-        adminCard.className = "card";
-        adminCard.style.cssText = "display:flex; justify-content:space-between; align-items:center";
-        adminCard.innerHTML = `<b>${c.id}</b>`;
-        
-        const delBtn = document.createElement('i');
-        delBtn.className = "ri-delete-bin-line icon-btn";
-        delBtn.style.cssText = "cursor:pointer; color:red;";
-        delBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          window.delClass(c.id);
-        });
-        adminCard.appendChild(delBtn);
-        ag.appendChild(adminCard);
-      }
-
-      if(sel) sel.innerHTML += `<option value="${c.id}">${c.id}</option>`;
+      sg.innerHTML += `<div class="card" onclick="openAuth('${c.id}')"><h3>${c.id}</h3></div>`;
+      ag.innerHTML += `
+        <div class="card" style="display:flex; justify-content:space-between; align-items:center">
+          <b>${c.id}</b>
+          <i class="ri-delete-bin-line icon-btn" onclick="delClass('${c.id}')" style="cursor:pointer; color:red"></i>
+        </div>`;
+      sel.innerHTML += `<option value="${c.id}">${c.id}</option>`;
       
       if(chkBoxList) {
         chkBoxList.innerHTML += `
@@ -125,11 +105,11 @@ async function loadData() {
       }
     });
   } catch (err) {
-    if(sg) sg.innerHTML = `<p style="color:red">Xatolik: ${err.message}</p>`;
+    sg.innerHTML = `<p style="color:red">Xatolik: ${err.message}. API URL to'g'riligini tekshiring.</p>`;
   }
 }
 
-// ─── PARALLEL CLASSES SELECTION HELPERS ───────────────────────────────────────
+// ─── PARALLEL CLASSED SELECTION HELPERS ───────────────────────────────────────
 window.selectAllParallelClasses = () => {
   const currentSelectedClass = document.getElementById('adm-sel-c').value;
   if(!currentSelectedClass) return alert("Avval yuqoridan asosiy sinfni tanlang!");
@@ -176,7 +156,7 @@ window.delClass = async (id) => {
   }
 };
 
-// ─── SAVOL SAQLASH / TAHRIRLASH ────────────────────────────────────────────────
+// ─── SAVOL SAQLASH ─────────────────────────────────────────────────────────────
 window.saveTest = async () => {
   const classId = document.getElementById('adm-sel-c').value;
   const question = document.getElementById('adm-q').value.trim();
@@ -192,35 +172,54 @@ window.saveTest = async () => {
     if(cb.value !== classId) targetClasses.push(cb.value);
   });
 
-  const bodyData = { question, correct_answer, wrong1, wrong2 };
-  
-  if (editingTestId) {
-    bodyData.id = editingTestId;
-  } else {
-    bodyData.targetClasses = targetClasses;
-  }
-
   try {
-    await api('/api/classes/' + classId + '/tests', 'POST', bodyData);
+    if (editingTestId) {
+      // Tahrirlash rejimi
+      await api('/api/tests/' + editingTestId, 'PUT', {
+        question, correct_answer, wrong1, wrong2
+      });
+      editingTestId = null;
+      alert("Savol muvaffaqiyatli tahrirlandi!");
+    } else {
+      // Yangi savol qo'shish
+      await api('/api/classes/' + classId + '/tests', 'POST', {
+        question, correct_answer, wrong1, wrong2, targetClasses
+      });
+    }
     
     document.getElementById('adm-q').value = "";
     document.getElementById('adm-a').value = "";
     document.getElementById('adm-w1').value = "";
     document.getElementById('adm-w2').value = "";
-    
-    if(editingTestId) {
-      editingTestId = null;
-      document.getElementById('save-test-btn').innerHTML = `<i class="ri-save-line"></i> SAQLASH`;
-      document.getElementById('bulk-classes-container').style.display = "block";
-    }
-
+    clearSelectionClasses();
     loadTTable();
   } catch (err) {
     alert("Xatolik: " + err.message);
   }
 };
 
-// ─── SAVOLLAR JADVALINI YUKLASH ─────────────────────────────────────────────
+// ─── SAVOLNI TAHRIRLASHNI BOSHLASH ──────────────────────────────────────────────
+window.editTest = (testId, question, correct_answer, options) => {
+  editingTestId = testId;
+  document.getElementById('adm-q').value = question;
+  document.getElementById('adm-a').value = correct_answer;
+  
+  let wrong1 = '';
+  let wrong2 = '';
+  try {
+    const opts = typeof options === 'string' ? JSON.parse(options) : options;
+    if(opts[1]) wrong1 = opts[1];
+    if(opts[2]) wrong2 = opts[2];
+  } catch(e) {}
+  
+  document.getElementById('adm-w1').value = wrong1;
+  document.getElementById('adm-w2').value = wrong2;
+  
+  // Scroll to input
+  document.getElementById('adm-q').scrollIntoView({ behavior: 'smooth' });
+};
+
+// ─── SAVOLLAR JADVALINI YUKLASH ───────────────────────────────────────────────
 window.loadTTable = async () => {
   const classId = document.getElementById('adm-sel-c').value;
   const box = document.getElementById('adm-t-list');
@@ -235,105 +234,35 @@ window.loadTTable = async () => {
       return;
     }
     tests.forEach((t, i) => {
-      let opts = [];
-      try {
-        opts = typeof t.options === 'string' ? JSON.parse(t.options) : t.options;
-      } catch(e) { opts = [t.correct_answer]; }
-
-      const row = document.createElement('div');
-      row.className = "test-item-row";
-      row.style.cssText = "background:white; padding:15px; margin-bottom:15px; border-radius:12px; border:1px solid #e2e8f0; position:relative;";
-      
-      row.innerHTML = `
-        <div class="test-content">
-          <b style="display:block; margin-bottom:5px; padding-right:60px;">${i + 1}. ${t.question}</b>
-          <span style="color:var(--primary); font-weight:bold; display:block; font-size:14px;">To'g'ri javob: ${t.correct_answer}</span>
-          <span style="color:#64748b; font-size:13px; display:block; margin-top:2px;">Noto'g'ri javoblar: ${opts[1] || '-'}, ${opts[2] || '-'}</span>
-        </div>
-        <div class="action-q-btns" style="position:absolute; top:10px; right:10px; display:flex; gap:10px; cursor:pointer;">
-        </div>
-      `;
-
-      // Tahrirlash tugmasi
-      const editBtn = document.createElement('i');
-      editBtn.className = "ri-edit-line";
-      editBtn.title = "Tahrirlash";
-      editBtn.style.color = "blue";
-      editBtn.addEventListener('click', () => editT(t, opts));
-      row.querySelector('.action-q-btns').appendChild(editBtn);
-
-      // O'chirish tugmasi
-      const delBtn = document.createElement('i');
-      delBtn.className = "ri-close-line";
-      delBtn.title = "Savolni o'chirish";
-      delBtn.style.color = "red";
-      delBtn.addEventListener('click', () => window.delT(t.id));
-      row.querySelector('.action-q-btns').appendChild(delBtn);
-
-      box.appendChild(row);
+      box.innerHTML += `
+        <div class="test-item-row" style="background:white; padding:15px; margin-bottom:15px; border-radius:12px; border:1px solid #e2e8f0; position:relative;">
+          <div class="test-content">
+            <b style="display:block; margin-bottom:5px; padding-right:50px;">${i + 1}. ${t.question}</b>
+            <span style="color:var(--primary); font-weight:bold;">Javob: ${t.correct_answer}</span>
+          </div>
+          <div style="position:absolute; top:10px; right:10px; display:flex; gap:8px;">
+            <button class="btn" style="padding:4px 8px; background:#2563eb; color:white; border:none; border-radius:6px; cursor:pointer; font-size:12px;" onclick="editTest(${t.id}, '${t.question.replace(/'/g, "\\'")}', '${t.correct_answer.replace(/'/g, "\\'")}', '${JSON.stringify(t.options).replace(/'/g, "\\'")}')" title="Tahrirlash">
+              <i class="ri-edit-line"></i> Tahrirlash
+            </button>
+            <button class="btn" style="padding:4px 8px; background:#dc2626; color:white; border:none; border-radius:6px; cursor:pointer; font-size:12px;" onclick="delT(${t.id})" title="Savolni o'chirish">
+              <i class="ri-close-line"></i> O'chirish
+            </button>
+          </div>
+        </div>`;
     });
   } catch (err) {
     box.innerHTML = "<p style='color:red'>Xatolik: " + err.message + "</p>";
   }
 };
 
-// ─── SAVOLNI TAHRIRLASH REJIMIGA O'TKAZISH ──────────────────────────────────────
-function editT(test, options) {
-  editingTestId = test.id;
-  document.getElementById('adm-q').value = test.question;
-  document.getElementById('adm-a').value = test.correct_answer;
-  document.getElementById('adm-w1').value = options[1] || '';
-  document.getElementById('adm-w2').value = options[2] || '';
-  
-  document.getElementById('save-test-btn').innerHTML = `<i class="ri-save-line"></i> YANGILASH (TAHRIR)`;
-  document.getElementById('bulk-classes-container').style.display = "none";
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
 // ─── SAVOL O'CHIRISH ───────────────────────────────────────────────────────────
 window.delT = async (testId) => {
-  if (confirm("Ushbu savol o'chirilsinmi?")) {
-    try {
-      await api('/api/tests/' + testId, 'DELETE');
-      loadTTable();
-    } catch (err) {
-      alert("Xatolik: " + err.message);
-    }
-  }
-};
-
-// ─── SAVOLLAR BAZASINI PDF YUKLAB OLISH ─────────────────────────────────────────
-window.downloadQuestionsPDF = async () => {
-  const classId = document.getElementById('adm-sel-c').value;
-  if (!classId) return alert("Avval sinfni tanlang!");
-  
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  
+  if (!confirm("Ushbu savolni o'chirib tashlamoqchimisiz?")) return;
   try {
-    const tests = await api('/api/classes/' + classId + '/tests');
-    if (tests.length === 0) return alert("Bu sinfda hech qanday savol yo'q!");
-
-    const rows = tests.map((t, idx) => {
-      let opts = [];
-      try {
-        opts = typeof t.options === 'string' ? JSON.parse(t.options) : t.options;
-      } catch(e) { opts = [t.correct_answer]; }
-      return [idx + 1, t.question, t.correct_answer, opts[1] || '', opts[2] || ''];
-    });
-
-    doc.setFontSize(16);
-    doc.text(`${classId} Sinfining Savollar Bazasi`, 14, 15);
-    doc.autoTable({
-      head: [['T/r', 'Savol Matni', 'To\'g\'ri Javob', 'Xato 1', 'Xato 2']],
-      body: rows,
-      startY: 22,
-      theme: 'grid',
-      headStyles: { fillColor: [79, 70, 229] }
-    });
-    doc.save(`${classId}_savollar_bazasi.pdf`);
+    await api('/api/tests/' + testId, 'DELETE');
+    loadTTable();
   } catch (err) {
-    alert("PDF yaratishda xatolik: " + err.message);
+    alert("Xatolik: " + err.message);
   }
 };
 
@@ -345,7 +274,7 @@ window.openAuth = async (id) => {
     const tests = await api('/api/grade/' + id + '/tests');
 
     if (tests.length === 0) {
-      return alert(id + " sinfiga tegishli testlar yuklanmagan!");
+      return alert(id + " sinfi guruhiga tegishli umumiy parallel yoki maxsus test yuklanmagan!");
     }
 
     tList = tests; 
@@ -436,13 +365,8 @@ window.loadResGrid = async () => {
   try {
     const classes = await api('/api/classes');
     g.innerHTML = "";
-    
     classes.forEach(c => {
-      const card = document.createElement('div');
-      card.className = "card";
-      card.innerHTML = `<h3>${c.id}</h3>`;
-      card.addEventListener('click', () => openRes(c.id));
-      g.appendChild(card);
+      g.innerHTML += `<div class="card" onclick="openRes('${c.id}')"><h3>${c.id}</h3></div>`;
     });
   } catch (err) {
     g.innerHTML = "<p style='color:red'>Xatolik: " + err.message + "</p>";
@@ -483,25 +407,19 @@ window.openRes = async (id) => {
         placeLabel = "🥉 3";
       }
 
-      const row = document.createElement('tr');
-      row.style.borderBottom = "1px solid #eee";
-      row.innerHTML = `
-        <td style="padding:15px"><span style="${badgeStyle}">${placeLabel}</span></td>
-        <td style="padding:15px"><b>${r.team_name}</b></td>
-        <td style="padding:15px">${r.student_name}</td>
-        <td style="padding:15px"><b style="color:var(--primary)">${r.score} / ${r.total}</b></td>
-        <td style="padding:15px"><small>${r.time_taken || new Date(r.created_at).toLocaleString('uz-UZ')}</small></td>
-        <td style="padding:15px; text-align:right">
-        </td>
-      `;
-
-      const delResBtn = document.createElement('button');
-      delResBtn.className = "res-del-btn";
-      delResBtn.innerHTML = `<i class="ri-delete-bin-line"></i>`;
-      delResBtn.addEventListener('click', () => delResult(r.id, id));
-      row.cells[5].appendChild(delResBtn);
-
-      tb.appendChild(row);
+      tb.innerHTML += `
+        <tr style="border-bottom:1px solid #eee">
+          <td style="padding:15px"><span style="${badgeStyle}">${placeLabel}</span></td>
+          <td style="padding:15px"><b>${r.team_name}</b></td>
+          <td style="padding:15px">${r.student_name}</td>
+          <td style="padding:15px"><b style="color:var(--primary)">${r.score} / ${r.total}</b></td>
+          <td style="padding:15px"><small>${r.time_taken || new Date(r.created_at).toLocaleString('uz-UZ')}</small></td>
+          <td style="padding:15px; text-align:right">
+            <button class="res-del-btn" onclick="delResult(${r.id}, '${id}')">
+              <i class="ri-delete-bin-line"></i>
+            </button>
+          </td>
+        </tr>`;
     });
   } catch (err) {
     tb.innerHTML = "<tr><td colspan='6' style='color:red; padding:15px'>Xatolik: " + err.message + "</td></tr>";
@@ -610,6 +528,49 @@ window.downloadTop3PDF = async () => {
   }
 };
 
+// ─── PDF: BARCHA SAVOLLAR VA JAVOBLAR ──────────────────────────────────────────
+window.downloadTestsPDF = async () => {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = 20;
+
+  try {
+    const classes = allGlobalClasses.length > 0 ? allGlobalClasses : await api('/api/classes');
+    doc.setFontSize(16);
+    doc.text("STEAM PLAZA - BARCHA SAVOLLAR VA JAVOBLAR", 14, y);
+    y += 12;
+
+    for (const c of classes) {
+      const tests = await api('/api/classes/' + c.id + '/tests');
+      
+      if (tests.length > 0) {
+        if (y > 240) { doc.addPage(); y = 20; }
+        doc.setFontSize(13);
+        doc.text(`${c.id} Sinf - ${tests.length} ta savol`, 14, y);
+        y += 8;
+
+        const rows = tests.map((t, idx) => [
+          idx + 1,
+          t.question.substring(0, 40) + (t.question.length > 40 ? '...' : ''),
+          t.correct_answer
+        ]);
+
+        doc.autoTable({ 
+          head: [['#', 'Savol (Qisqacha)', 'To\'g\'ri Javob']], 
+          body: rows, 
+          startY: y, 
+          theme: 'grid',
+          columnStyles: { 0: { cellWidth: 15 }, 1: { cellWidth: 95 }, 2: { cellWidth: 70 } }
+        });
+        y = doc.lastAutoTable.finalY + 10;
+      }
+    }
+    doc.save("barcha_savollar_javoblar.pdf");
+  } catch (err) {
+    alert("PDF yaratishda xatolik: " + err.message);
+  }
+};
+
 // ─── BAZANI TOZALASH ───────────────────────────────────────────────────────────
 window.clearDb = async () => {
   if (confirm("Hammasi o'chadi! Davom etasizmi?")) {
@@ -622,7 +583,5 @@ window.clearDb = async () => {
   }
 };
 
-// ─── INITIAL LOAD ──────────────────────────────────────────────────────────────
-document.addEventListener("DOMContentLoaded", () => {
-  loadData();
-});
+// ─── ISHGA TUSHIRISH ───────────────────────────────────────────────────────────
+loadData();

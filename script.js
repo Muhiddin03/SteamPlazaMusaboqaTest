@@ -1,4 +1,4 @@
-// ─── API URL - Railway URL manzilingiz ───
+// ─── API URL ───────────────────────────────────────────────────────────────────
 const API = "https://steamplazamusaboqatestbackend-production.up.railway.app";
 
 // ─── STATE ─────────────────────────────────────────────────────────────────────
@@ -6,8 +6,7 @@ let curClass = "";
 let tList = [];
 let qIdx = 0;
 let score = 0;
-let allGlobalClasses = []; 
-let editingTestId = null;
+let allGlobalClasses = [];
 
 // ─── HELPER: API CALL ──────────────────────────────────────────────────────────
 async function api(path, method = 'GET', body = null) {
@@ -76,32 +75,45 @@ async function loadData() {
 
   try {
     const classes = await api('/api/classes');
-    allGlobalClasses = classes; 
+    allGlobalClasses = classes;
 
     sg.innerHTML = "";
     ag.innerHTML = "";
     sel.innerHTML = "<option value=''>Sinf tanlang</option>";
-    if(chkBoxList) chkBoxList.innerHTML = "";
+    if (chkBoxList) chkBoxList.innerHTML = "";
 
     if (classes.length === 0) {
       sg.innerHTML = "<p style='color:#64748b'>Hech qanday sinf yo'q</p>";
     }
 
     classes.forEach(c => {
-      sg.innerHTML += `<div class="card" onclick="openAuth('${c.id}')"><h3>${c.id}</h3></div>`;
-      ag.innerHTML += `
-        <div class="card" style="display:flex; justify-content:space-between; align-items:center">
-          <b>${c.id}</b>
-          <i class="ri-delete-bin-line icon-btn" onclick="delClass('${c.id}')" style="cursor:pointer; color:red"></i>
-        </div>`;
+      // FIX: data-id ishlatildi, onclick ichida apostrof muammosi hal qilindi
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `<h3>${c.id}</h3>`;
+      card.addEventListener('click', () => openAuth(c.id));
+      sg.appendChild(card);
+
+      const admCard = document.createElement('div');
+      admCard.className = 'card';
+      admCard.style.cssText = 'display:flex; justify-content:space-between; align-items:center';
+      admCard.innerHTML = `<b>${c.id}</b><i class="ri-delete-bin-line icon-btn" style="cursor:pointer; color:red" title="O'chirish"></i>`;
+      admCard.querySelector('i').addEventListener('click', () => delClass(c.id));
+      ag.appendChild(admCard);
+
       sel.innerHTML += `<option value="${c.id}">${c.id}</option>`;
-      
-      if(chkBoxList) {
-        chkBoxList.innerHTML += `
-          <label style="display: flex; align-items: center; gap: 5px; font-weight: normal; margin: 0; width: calc(25% - 15px); min-width: 80px; cursor:pointer;">
-            <input type="checkbox" name="target_classes" value="${c.id}" style="width: auto; margin: 0;"> ${c.id}
-          </label>
-        `;
+
+      if (chkBoxList) {
+        const label = document.createElement('label');
+        label.style.cssText = 'display:flex; align-items:center; gap:5px; font-weight:normal; margin:0; width:calc(25% - 15px); min-width:80px; cursor:pointer;';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.name = 'target_classes';
+        cb.value = c.id;
+        cb.style.cssText = 'width:auto; margin:0;';
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(' ' + c.id));
+        chkBoxList.appendChild(label);
       }
     });
   } catch (err) {
@@ -109,26 +121,19 @@ async function loadData() {
   }
 }
 
-// ─── PARALLEL CLASSED SELECTION HELPERS ───────────────────────────────────────
+// ─── PARALLEL SINF TANLASH ─────────────────────────────────────────────────────
 window.selectAllParallelClasses = () => {
   const currentSelectedClass = document.getElementById('adm-sel-c').value;
-  if(!currentSelectedClass) return alert("Avval yuqoridan asosiy sinfni tanlang!");
-  
+  if (!currentSelectedClass) return alert("Avval yuqoridan asosiy sinfni tanlang!");
   const grade = getGrade(currentSelectedClass);
   const checkboxes = document.querySelectorAll('input[name="target_classes"]');
-  
   checkboxes.forEach(cb => {
-    if(getGrade(cb.value) === grade) {
-      cb.checked = true;
-    } else {
-      cb.checked = false;
-    }
+    cb.checked = getGrade(cb.value) === grade;
   });
 };
 
 window.clearSelectionClasses = () => {
-  const checkboxes = document.querySelectorAll('input[name="target_classes"]');
-  checkboxes.forEach(cb => cb.checked = false);
+  document.querySelectorAll('input[name="target_classes"]').forEach(cb => cb.checked = false);
 };
 
 // ─── SINF QO'SHISH ─────────────────────────────────────────────────────────────
@@ -148,7 +153,7 @@ window.addClass = async () => {
 window.delClass = async (id) => {
   if (confirm(id + " sinfi o'chirilsinmi?")) {
     try {
-      await api('/api/classes/' + id, 'DELETE');
+      await api('/api/classes/' + encodeURIComponent(id), 'DELETE');
       loadData();
     } catch (err) {
       alert("Xatolik: " + err.message);
@@ -169,57 +174,24 @@ window.saveTest = async () => {
   const checkboxes = document.querySelectorAll('input[name="target_classes"]:checked');
   const targetClasses = [classId];
   checkboxes.forEach(cb => {
-    if(cb.value !== classId) targetClasses.push(cb.value);
+    if (cb.value !== classId) targetClasses.push(cb.value);
   });
 
   try {
-    if (editingTestId) {
-      // Tahrirlash rejimi
-      await api('/api/tests/' + editingTestId, 'PUT', {
-        question, correct_answer, wrong1, wrong2
-      });
-      editingTestId = null;
-      alert("Savol muvaffaqiyatli tahrirlandi!");
-    } else {
-      // Yangi savol qo'shish
-      await api('/api/classes/' + classId + '/tests', 'POST', {
-        question, correct_answer, wrong1, wrong2, targetClasses
-      });
-    }
-    
+    await api('/api/classes/' + encodeURIComponent(classId) + '/tests', 'POST', {
+      question, correct_answer, wrong1, wrong2, targetClasses
+    });
     document.getElementById('adm-q').value = "";
     document.getElementById('adm-a').value = "";
     document.getElementById('adm-w1').value = "";
     document.getElementById('adm-w2').value = "";
-    clearSelectionClasses();
     loadTTable();
   } catch (err) {
     alert("Xatolik: " + err.message);
   }
 };
 
-// ─── SAVOLNI TAHRIRLASHNI BOSHLASH ──────────────────────────────────────────────
-window.editTest = (testId, question, correct_answer, options) => {
-  editingTestId = testId;
-  document.getElementById('adm-q').value = question;
-  document.getElementById('adm-a').value = correct_answer;
-  
-  let wrong1 = '';
-  let wrong2 = '';
-  try {
-    const opts = typeof options === 'string' ? JSON.parse(options) : options;
-    if(opts[1]) wrong1 = opts[1];
-    if(opts[2]) wrong2 = opts[2];
-  } catch(e) {}
-  
-  document.getElementById('adm-w1').value = wrong1;
-  document.getElementById('adm-w2').value = wrong2;
-  
-  // Scroll to input
-  document.getElementById('adm-q').scrollIntoView({ behavior: 'smooth' });
-};
-
-// ─── SAVOLLAR JADVALINI YUKLASH ───────────────────────────────────────────────
+// ─── SAVOLLAR JADVALINI YUKLASH (Tahrirlash + PDF imkoniyati qo'shildi) ────────
 window.loadTTable = async () => {
   const classId = document.getElementById('adm-sel-c').value;
   const box = document.getElementById('adm-t-list');
@@ -227,37 +199,115 @@ window.loadTTable = async () => {
 
   box.innerHTML = "<p>Yuklanmoqda...</p>";
   try {
-    const tests = await api('/api/classes/' + classId + '/tests');
+    const tests = await api('/api/classes/' + encodeURIComponent(classId) + '/tests');
     box.innerHTML = "";
+
     if (tests.length === 0) {
       box.innerHTML = "<p style='color:#64748b'>Savollar yo'q</p>";
       return;
     }
+
+    // PDF tugmasi - faqat testlar bo'lsa ko'rsatiladi
+    const pdfBtn = document.createElement('div');
+    pdfBtn.style.cssText = 'margin-bottom:15px; display:flex; gap:10px;';
+    pdfBtn.innerHTML = `
+      <button class="btn btn-primary" onclick="downloadTestsPDF('${classId.replace(/'/g, "\\'")}')">
+        <i class="ri-file-pdf-line"></i> SAVOLLARNI PDF YUKLASH
+      </button>
+      <span style="align-self:center; color:#64748b; font-size:14px;">${tests.length} ta savol</span>
+    `;
+    box.appendChild(pdfBtn);
+
     tests.forEach((t, i) => {
-      box.innerHTML += `
-        <div class="test-item-row">
-          <div class="test-content">
-            <b>${i + 1}. ${t.question}</b>
-            <span>Javob: ${t.correct_answer}</span>
-          </div>
-          <div class="test-action-buttons">
-            <button class="btn-edit-test" onclick="editTest(${t.id}, '${t.question.replace(/'/g, "\\'")}', '${t.correct_answer.replace(/'/g, "\\'")}', '${JSON.stringify(t.options).replace(/'/g, "\\'")}')" title="Tahrirlash">
+      let opts = [];
+      try {
+        opts = typeof t.options === 'string' ? JSON.parse(t.options) : t.options;
+      } catch (e) {
+        opts = [t.correct_answer];
+      }
+
+      const wrongOpts = opts.filter(o => o && o.trim() !== '' && o !== t.correct_answer);
+
+      const row = document.createElement('div');
+      row.className = 'test-item-row';
+      row.dataset.testId = t.id;
+      row.style.cssText = 'background:white; padding:15px; margin-bottom:15px; border-radius:12px; border:1px solid #e2e8f0; position:relative;';
+
+      // Ko'rish rejimi
+      row.innerHTML = `
+        <div class="test-view-mode">
+          <b style="display:block; margin-bottom:5px; padding-right:60px;">${i + 1}. ${t.question}</b>
+          <span style="color:var(--primary); font-weight:bold;">✓ To'g'ri: ${t.correct_answer}</span>
+          ${wrongOpts.length > 0 ? `<span style="color:#ef4444; margin-left:15px;">✗ Xato: ${wrongOpts.join(', ')}</span>` : ''}
+          <div style="position:absolute; top:10px; right:10px; display:flex; gap:8px;">
+            <button class="btn" onclick="editTestMode(${t.id})" title="Tahrirlash"
+              style="padding:5px 10px; background:#f1f5f9; font-size:12px;">
               <i class="ri-edit-line"></i>
             </button>
-            <button class="btn-delete-test" onclick="delT(${t.id})" title="Savolni o'chirish">
+            <button class="btn btn-danger" onclick="delT(${t.id})" title="O'chirish"
+              style="padding:5px 10px; font-size:12px;">
               <i class="ri-close-line"></i>
             </button>
           </div>
-        </div>`;
+        </div>
+        <div class="test-edit-mode" style="display:none;">
+          <input type="text" id="eq-${t.id}" value="${t.question.replace(/"/g, '&quot;')}" placeholder="Savol matni" style="margin-bottom:8px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
+            <input type="text" id="ea-${t.id}" value="${t.correct_answer.replace(/"/g, '&quot;')}" placeholder="To'g'ri javob" style="border-color:var(--primary); margin:0;">
+            <input type="text" id="ew1-${t.id}" value="${(wrongOpts[0] || '').replace(/"/g, '&quot;')}" placeholder="Xato 1" style="margin:0;">
+            <input type="text" id="ew2-${t.id}" value="${(wrongOpts[1] || '').replace(/"/g, '&quot;')}" placeholder="Xato 2" style="margin:0;">
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-primary" onclick="saveEditTest(${t.id})" style="font-size:13px; padding:8px 15px;">
+              <i class="ri-save-line"></i> Saqlash
+            </button>
+            <button class="btn" onclick="cancelEditTest(${t.id})" style="font-size:13px; padding:8px 15px; background:#e2e8f0;">
+              Bekor
+            </button>
+          </div>
+        </div>
+      `;
+      box.appendChild(row);
     });
   } catch (err) {
     box.innerHTML = "<p style='color:red'>Xatolik: " + err.message + "</p>";
   }
 };
 
+// ─── TEST TAHRIRLASH MODLARI ───────────────────────────────────────────────────
+window.editTestMode = (testId) => {
+  const row = document.querySelector(`[data-test-id="${testId}"]`);
+  if (!row) return;
+  row.querySelector('.test-view-mode').style.display = 'none';
+  row.querySelector('.test-edit-mode').style.display = 'block';
+};
+
+window.cancelEditTest = (testId) => {
+  const row = document.querySelector(`[data-test-id="${testId}"]`);
+  if (!row) return;
+  row.querySelector('.test-view-mode').style.display = 'block';
+  row.querySelector('.test-edit-mode').style.display = 'none';
+};
+
+window.saveEditTest = async (testId) => {
+  const question = document.getElementById(`eq-${testId}`).value.trim();
+  const correct_answer = document.getElementById(`ea-${testId}`).value.trim();
+  const wrong1 = document.getElementById(`ew1-${testId}`).value.trim();
+  const wrong2 = document.getElementById(`ew2-${testId}`).value.trim();
+
+  if (!question || !correct_answer) return alert("Savol va to'g'ri javob kerak!");
+
+  try {
+    await api('/api/tests/' + testId, 'PUT', { question, correct_answer, wrong1, wrong2 });
+    loadTTable();
+  } catch (err) {
+    alert("Xatolik: " + err.message);
+  }
+};
+
 // ─── SAVOL O'CHIRISH ───────────────────────────────────────────────────────────
 window.delT = async (testId) => {
-  if (!confirm("Ushbu savolni o'chirib tashlamoqchimisiz?")) return;
+  if (!confirm("Ushbu savolni o'chirasizmi?")) return;
   try {
     await api('/api/tests/' + testId, 'DELETE');
     loadTTable();
@@ -266,18 +316,70 @@ window.delT = async (testId) => {
   }
 };
 
+// ─── TESTLARNI PDF YUKLASH (Yangi funksiya) ────────────────────────────────────
+window.downloadTestsPDF = async (classId) => {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  try {
+    const tests = await api('/api/classes/' + encodeURIComponent(classId) + '/tests');
+    if (tests.length === 0) return alert("Savollar yo'q!");
+
+    doc.setFontSize(16);
+    doc.text(classId + " - Savollar bazasi", 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Jami: ${tests.length} ta savol`, 14, 22);
+
+    const rows = tests.map((t, i) => {
+      let opts = [];
+      try {
+        opts = typeof t.options === 'string' ? JSON.parse(t.options) : t.options;
+      } catch (e) {
+        opts = [t.correct_answer];
+      }
+      const wrongOpts = opts.filter(o => o && o.trim() !== '' && o !== t.correct_answer);
+      return [
+        i + 1,
+        t.question,
+        t.correct_answer,
+        wrongOpts.join(' / ') || '-'
+      ];
+    });
+
+    doc.autoTable({
+      head: [['#', 'Savol', "To'g'ri javob", 'Xato javoblar']],
+      body: rows,
+      startY: 28,
+      theme: 'grid',
+      headStyles: { fillColor: [16, 185, 129] },
+      columnStyles: {
+        0: { cellWidth: 10 },
+        1: { cellWidth: 90 },
+        2: { cellWidth: 45 },
+        3: { cellWidth: 45 }
+      },
+      styles: { fontSize: 9, cellPadding: 4 }
+    });
+
+    doc.save(`${classId}_savollar.pdf`);
+  } catch (err) {
+    alert("PDF yaratishda xatolik: " + err.message);
+  }
+};
+
 // ─── TEST BOSHLASH (AUTH) ──────────────────────────────────────────────────────
+// FIX: /api/grade/ o'rniga /api/classes/ ishlatildi - har bir sinf faqat o'zining testlarini oladi
 window.openAuth = async (id) => {
   curClass = id;
 
   try {
-    const tests = await api('/api/grade/' + id + '/tests');
+    const tests = await api('/api/classes/' + encodeURIComponent(id) + '/tests');
 
     if (tests.length === 0) {
-      return alert(id + " sinfi guruhiga tegishli umumiy parallel yoki maxsus test yuklanmagan!");
+      return alert(id + " sinfiga test biriktirilmagan!");
     }
 
-    tList = tests; 
+    // Savollarni aralashtirib ko'rsatish
+    tList = tests.sort(() => Math.random() - 0.5);
 
     document.getElementById('sel-c-title').innerText = id;
     document.getElementById('v-home').classList.add('hidden');
@@ -366,7 +468,11 @@ window.loadResGrid = async () => {
     const classes = await api('/api/classes');
     g.innerHTML = "";
     classes.forEach(c => {
-      g.innerHTML += `<div class="card" onclick="openRes('${c.id}')"><h3>${c.id}</h3></div>`;
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `<h3>${c.id}</h3>`;
+      card.addEventListener('click', () => openRes(c.id));
+      g.appendChild(card);
     });
   } catch (err) {
     g.innerHTML = "<p style='color:red'>Xatolik: " + err.message + "</p>";
@@ -384,7 +490,7 @@ window.openRes = async (id) => {
   tb.innerHTML = "<tr><td colspan='6' style='text-align:center'>Yuklanmoqda...</td></tr>";
 
   try {
-    const results = await api('/api/classes/' + id + '/results');
+    const results = await api('/api/classes/' + encodeURIComponent(id) + '/results');
     tb.innerHTML = "";
 
     if (results.length === 0) {
@@ -397,29 +503,30 @@ window.openRes = async (id) => {
       let placeLabel = idx + 1;
 
       if (idx === 0) {
-        badgeStyle = "background-color: #fef08a; color: #854d0e; font-weight: 900; border-radius: 6px; padding: 4px 8px;"; 
+        badgeStyle = "background-color:#fef08a; color:#854d0e; font-weight:900; border-radius:6px; padding:4px 8px;";
         placeLabel = "🥇 1";
       } else if (idx === 1) {
-        badgeStyle = "background-color: #e2e8f0; color: #334155; font-weight: 900; border-radius: 6px; padding: 4px 8px;"; 
+        badgeStyle = "background-color:#e2e8f0; color:#334155; font-weight:900; border-radius:6px; padding:4px 8px;";
         placeLabel = "🥈 2";
       } else if (idx === 2) {
-        badgeStyle = "background-color: #ffedd5; color: #c2410c; font-weight: 900; border-radius: 6px; padding: 4px 8px;"; 
+        badgeStyle = "background-color:#ffedd5; color:#c2410c; font-weight:900; border-radius:6px; padding:4px 8px;";
         placeLabel = "🥉 3";
       }
 
-      tb.innerHTML += `
-        <tr style="border-bottom:1px solid #eee">
-          <td style="padding:15px"><span style="${badgeStyle}">${placeLabel}</span></td>
-          <td style="padding:15px"><b>${r.team_name}</b></td>
-          <td style="padding:15px">${r.student_name}</td>
-          <td style="padding:15px"><b style="color:var(--primary)">${r.score} / ${r.total}</b></td>
-          <td style="padding:15px"><small>${r.time_taken || new Date(r.created_at).toLocaleString('uz-UZ')}</small></td>
-          <td style="padding:15px; text-align:right">
-            <button class="res-del-btn" onclick="delResult(${r.id}, '${id}')">
-              <i class="ri-delete-bin-line"></i>
-            </button>
-          </td>
-        </tr>`;
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid #eee';
+      tr.innerHTML = `
+        <td style="padding:15px"><span style="${badgeStyle}">${placeLabel}</span></td>
+        <td style="padding:15px"><b>${r.team_name}</b></td>
+        <td style="padding:15px">${r.student_name}</td>
+        <td style="padding:15px"><b style="color:var(--primary)">${r.score} / ${r.total}</b></td>
+        <td style="padding:15px"><small>${r.time_taken || new Date(r.created_at).toLocaleString('uz-UZ')}</small></td>
+        <td style="padding:15px; text-align:right">
+          <button class="res-del-btn" title="O'chirish"><i class="ri-delete-bin-line"></i></button>
+        </td>
+      `;
+      tr.querySelector('.res-del-btn').addEventListener('click', () => delResult(r.id, id));
+      tb.appendChild(tr);
     });
   } catch (err) {
     tb.innerHTML = "<tr><td colspan='6' style='color:red; padding:15px'>Xatolik: " + err.message + "</td></tr>";
@@ -428,7 +535,7 @@ window.openRes = async (id) => {
 
 // ─── NATIJA O'CHIRISH ──────────────────────────────────────────────────────────
 window.delResult = async (id, classId) => {
-  if (confirm("Ushbu natijani o'chirib tashlamoqchimisiz?")) {
+  if (confirm("Ushbu natijani o'chirasizmi?")) {
     try {
       await api('/api/results/' + id, 'DELETE');
       openRes(classId);
@@ -443,11 +550,10 @@ window.downloadSinglePDF = async (className) => {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   try {
-    const results = await api('/api/classes/' + className + '/results');
+    const results = await api('/api/classes/' + encodeURIComponent(className) + '/results');
     const rows = results.map((r, idx) => [idx + 1, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
-    
     doc.text(className + " Sinf Natijalari", 14, 15);
-    doc.autoTable({ head: [['O\'rin', 'Jamoa', 'Ism', 'Ball', 'Vaqt']], body: rows, startY: 20, theme: 'grid' });
+    doc.autoTable({ head: [["O'rin", 'Jamoa', 'Ism', 'Ball', 'Vaqt']], body: rows, startY: 20, theme: 'grid' });
     doc.save(`${className}_natijalari.pdf`);
   } catch (err) {
     alert("PDF yaratishda xatolik: " + err.message);
@@ -467,13 +573,13 @@ window.downloadAllResultsPDF = async () => {
     y += 10;
 
     for (const c of classes) {
-      const results = await api('/api/classes/' + c.id + '/results');
+      const results = await api('/api/classes/' + encodeURIComponent(c.id) + '/results');
       if (results.length > 0) {
         if (y > 240) { doc.addPage(); y = 20; }
         doc.setFontSize(14);
         doc.text(c.id + " Sinf Natijalari", 14, y);
         const rows = results.map((r, idx) => [idx + 1, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
-        doc.autoTable({ head: [['O\'rin', 'Jamoa', 'Ism', 'Ball', 'Vaqt']], body: rows, startY: y + 2, theme: 'grid' });
+        doc.autoTable({ head: [["O'rin", 'Jamoa', 'Ism', 'Ball', 'Vaqt']], body: rows, startY: y + 2, theme: 'grid' });
         y = doc.lastAutoTable.finalY + 15;
       }
     }
@@ -496,9 +602,9 @@ window.downloadTop3PDF = async () => {
     y += 12;
 
     for (const c of classes) {
-      const results = await api('/api/classes/' + c.id + '/results');
+      const results = await api('/api/classes/' + encodeURIComponent(c.id) + '/results');
       const top3 = results.slice(0, 3);
-      
+
       if (top3.length > 0) {
         if (y > 240) { doc.addPage(); y = 20; }
         doc.setFontSize(14);
@@ -512,60 +618,17 @@ window.downloadTop3PDF = async () => {
           return [medal, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || ''];
         });
 
-        doc.autoTable({ 
-          head: [['O\'rin', 'Jamoa', 'Ism', 'Ball', 'Vaqt']], 
-          body: rows, 
-          startY: y + 3, 
+        doc.autoTable({
+          head: [["O'rin", 'Jamoa', 'Ism', 'Ball', 'Vaqt']],
+          body: rows,
+          startY: y + 3,
           theme: 'striped',
           headStyles: { fillColor: [16, 185, 129] }
         });
         y = doc.lastAutoTable.finalY + 12;
       }
     }
-    doc.save("top3_sinflar_goliplari.pdf");
-  } catch (err) {
-    alert("PDF yaratishda xatolik: " + err.message);
-  }
-};
-
-// ─── PDF: BARCHA SAVOLLAR VA JAVOBLAR ──────────────────────────────────────────
-window.downloadTestsPDF = async () => {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  let y = 20;
-
-  try {
-    const classes = allGlobalClasses.length > 0 ? allGlobalClasses : await api('/api/classes');
-    doc.setFontSize(16);
-    doc.text("STEAM PLAZA - BARCHA SAVOLLAR VA JAVOBLAR", 14, y);
-    y += 12;
-
-    for (const c of classes) {
-      const tests = await api('/api/classes/' + c.id + '/tests');
-      
-      if (tests.length > 0) {
-        if (y > 240) { doc.addPage(); y = 20; }
-        doc.setFontSize(13);
-        doc.text(`${c.id} Sinf - ${tests.length} ta savol`, 14, y);
-        y += 8;
-
-        const rows = tests.map((t, idx) => [
-          idx + 1,
-          t.question.substring(0, 40) + (t.question.length > 40 ? '...' : ''),
-          t.correct_answer
-        ]);
-
-        doc.autoTable({ 
-          head: [['#', 'Savol (Qisqacha)', 'To\'g\'ri Javob']], 
-          body: rows, 
-          startY: y, 
-          theme: 'grid',
-          columnStyles: { 0: { cellWidth: 15 }, 1: { cellWidth: 95 }, 2: { cellWidth: 70 } }
-        });
-        y = doc.lastAutoTable.finalY + 10;
-      }
-    }
-    doc.save("barcha_savollar_javoblar.pdf");
+    doc.save("top3_sinflar_goliblari.pdf");
   } catch (err) {
     alert("PDF yaratishda xatolik: " + err.message);
   }

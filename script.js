@@ -191,32 +191,35 @@ window.saveTest = async () => {
   }
 };
 
-// ─── SAVOLLAR JADVALINI YUKLASH (Tahrirlash + PDF imkoniyati qo'shildi) ────────
+// ─── SAVOLLAR JADVALINI YUKLASH ───────────────────────────────────────────────
 window.loadTTable = async () => {
   const classId = document.getElementById('adm-sel-c').value;
   const box = document.getElementById('adm-t-list');
   if (!classId) return box.innerHTML = "";
 
-  box.innerHTML = "<p>Yuklanmoqda...</p>";
+  box.innerHTML = "<p style='color:#64748b; padding:10px;'>Yuklanmoqda...</p>";
   try {
     const tests = await api('/api/classes/' + encodeURIComponent(classId) + '/tests');
     box.innerHTML = "";
 
     if (tests.length === 0) {
-      box.innerHTML = "<p style='color:#64748b'>Savollar yo'q</p>";
+      box.innerHTML = "<p style='color:#64748b; padding:10px;'>Savollar yo'q</p>";
       return;
     }
 
-    // PDF tugmasi - faqat testlar bo'lsa ko'rsatiladi
-    const pdfBtn = document.createElement('div');
-    pdfBtn.style.cssText = 'margin-bottom:15px; display:flex; gap:10px;';
-    pdfBtn.innerHTML = `
-      <button class="btn btn-primary" onclick="downloadTestsPDF('${classId.replace(/'/g, "\\'")}')">
-        <i class="ri-file-pdf-line"></i> SAVOLLARNI PDF YUKLASH
-      </button>
-      <span style="align-self:center; color:#64748b; font-size:14px;">${tests.length} ta savol</span>
-    `;
-    box.appendChild(pdfBtn);
+    // PDF + hisoblagich satri
+    const pdfBar = document.createElement('div');
+    pdfBar.className = 'tests-pdf-bar';
+    const pdfBtn = document.createElement('button');
+    pdfBtn.className = 'btn btn-primary';
+    pdfBtn.innerHTML = '<i class="ri-file-pdf-line"></i> SAVOLLARNI PDF YUKLASH';
+    pdfBtn.addEventListener('click', () => downloadTestsPDF(classId));
+    const countBadge = document.createElement('span');
+    countBadge.className = 'tests-count-badge';
+    countBadge.textContent = tests.length + ' ta savol';
+    pdfBar.appendChild(pdfBtn);
+    pdfBar.appendChild(countBadge);
+    box.appendChild(pdfBar);
 
     tests.forEach((t, i) => {
       let opts = [];
@@ -225,52 +228,126 @@ window.loadTTable = async () => {
       } catch (e) {
         opts = [t.correct_answer];
       }
-
       const wrongOpts = opts.filter(o => o && o.trim() !== '' && o !== t.correct_answer);
 
       const row = document.createElement('div');
       row.className = 'test-item-row';
       row.dataset.testId = t.id;
-      row.style.cssText = 'background:white; padding:15px; margin-bottom:15px; border-radius:12px; border:1px solid #e2e8f0; position:relative;';
 
-      // Ko'rish rejimi
-      row.innerHTML = `
-        <div class="test-view-mode">
-          <b style="display:block; margin-bottom:5px; padding-right:60px;">${i + 1}. ${t.question}</b>
-          <span style="color:var(--primary); font-weight:bold;">✓ To'g'ri: ${t.correct_answer}</span>
-          ${wrongOpts.length > 0 ? `<span style="color:#ef4444; margin-left:15px;">✗ Xato: ${wrongOpts.join(', ')}</span>` : ''}
-          <div style="position:absolute; top:10px; right:10px; display:flex; gap:8px;">
-            <button class="btn" onclick="editTestMode(${t.id})" title="Tahrirlash"
-              style="padding:5px 10px; background:#f1f5f9; font-size:12px;">
-              <i class="ri-edit-line"></i>
-            </button>
-            <button class="btn btn-danger" onclick="delT(${t.id})" title="O'chirish"
-              style="padding:5px 10px; font-size:12px;">
-              <i class="ri-close-line"></i>
-            </button>
-          </div>
-        </div>
-        <div class="test-edit-mode" style="display:none;">
-          <input type="text" id="eq-${t.id}" value="${t.question.replace(/"/g, '&quot;')}" placeholder="Savol matni" style="margin-bottom:8px;">
-          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
-            <input type="text" id="ea-${t.id}" value="${t.correct_answer.replace(/"/g, '&quot;')}" placeholder="To'g'ri javob" style="border-color:var(--primary); margin:0;">
-            <input type="text" id="ew1-${t.id}" value="${(wrongOpts[0] || '').replace(/"/g, '&quot;')}" placeholder="Xato 1" style="margin:0;">
-            <input type="text" id="ew2-${t.id}" value="${(wrongOpts[1] || '').replace(/"/g, '&quot;')}" placeholder="Xato 2" style="margin:0;">
-          </div>
-          <div style="display:flex; gap:8px;">
-            <button class="btn btn-primary" onclick="saveEditTest(${t.id})" style="font-size:13px; padding:8px 15px;">
-              <i class="ri-save-line"></i> Saqlash
-            </button>
-            <button class="btn" onclick="cancelEditTest(${t.id})" style="font-size:13px; padding:8px 15px; background:#e2e8f0;">
-              Bekor
-            </button>
-          </div>
-        </div>
-      `;
+      // Ko'rish qismi
+      const viewMode = document.createElement('div');
+      viewMode.className = 'test-view-mode';
+
+      const numBadge = document.createElement('div');
+      numBadge.className = 'test-num';
+      numBadge.textContent = i + 1;
+
+      const qText = document.createElement('div');
+      qText.className = 'test-question-text';
+      qText.textContent = t.question;
+
+      const answers = document.createElement('div');
+      answers.className = 'test-answers';
+
+      const correctBadge = document.createElement('span');
+      correctBadge.className = 'answer-correct';
+      correctBadge.textContent = '✓ ' + t.correct_answer;
+      answers.appendChild(correctBadge);
+
+      wrongOpts.forEach(w => {
+        const wBadge = document.createElement('span');
+        wBadge.className = 'answer-wrong';
+        wBadge.textContent = '✗ ' + w;
+        answers.appendChild(wBadge);
+      });
+
+      const actionBtns = document.createElement('div');
+      actionBtns.className = 'test-action-buttons';
+
+      const editBtn = document.createElement('button');
+      editBtn.className = 'btn-edit-test';
+      editBtn.title = 'Tahrirlash';
+      editBtn.innerHTML = '<i class="ri-edit-line"></i>';
+      editBtn.addEventListener('click', () => editTestMode(t.id));
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn-delete-test';
+      delBtn.title = "O'chirish";
+      delBtn.innerHTML = '<i class="ri-close-line"></i>';
+      delBtn.addEventListener('click', () => delT(t.id));
+
+      actionBtns.appendChild(editBtn);
+      actionBtns.appendChild(delBtn);
+
+      viewMode.appendChild(numBadge);
+      viewMode.appendChild(qText);
+      viewMode.appendChild(answers);
+      viewMode.appendChild(actionBtns);
+
+      // Tahrirlash qismi
+      const editMode = document.createElement('div');
+      editMode.className = 'test-edit-mode';
+      editMode.style.display = 'none';
+
+      const qInput = document.createElement('input');
+      qInput.type = 'text';
+      qInput.id = 'eq-' + t.id;
+      qInput.value = t.question;
+      qInput.placeholder = 'Savol matni';
+
+      const editGrid = document.createElement('div');
+      editGrid.className = 'edit-grid';
+
+      const aInput = document.createElement('input');
+      aInput.type = 'text';
+      aInput.id = 'ea-' + t.id;
+      aInput.value = t.correct_answer;
+      aInput.placeholder = "To'g'ri javob";
+      aInput.style.borderColor = 'var(--primary)';
+
+      const w1Input = document.createElement('input');
+      w1Input.type = 'text';
+      w1Input.id = 'ew1-' + t.id;
+      w1Input.value = wrongOpts[0] || '';
+      w1Input.placeholder = 'Xato 1';
+
+      const w2Input = document.createElement('input');
+      w2Input.type = 'text';
+      w2Input.id = 'ew2-' + t.id;
+      w2Input.value = wrongOpts[1] || '';
+      w2Input.placeholder = 'Xato 2';
+
+      editGrid.appendChild(aInput);
+      editGrid.appendChild(w1Input);
+      editGrid.appendChild(w2Input);
+
+      const editActions = document.createElement('div');
+      editActions.className = 'edit-actions';
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'btn btn-primary';
+      saveBtn.innerHTML = '<i class="ri-save-line"></i> Saqlash';
+      saveBtn.addEventListener('click', () => saveEditTest(t.id));
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'btn';
+      cancelBtn.style.background = '#e2e8f0';
+      cancelBtn.textContent = 'Bekor';
+      cancelBtn.addEventListener('click', () => cancelEditTest(t.id));
+
+      editActions.appendChild(saveBtn);
+      editActions.appendChild(cancelBtn);
+
+      editMode.appendChild(qInput);
+      editMode.appendChild(editGrid);
+      editMode.appendChild(editActions);
+
+      row.appendChild(viewMode);
+      row.appendChild(editMode);
       box.appendChild(row);
     });
   } catch (err) {
-    box.innerHTML = "<p style='color:red'>Xatolik: " + err.message + "</p>";
+    box.innerHTML = "<p style='color:red; padding:10px;'>Xatolik: " + err.message + "</p>";
   }
 };
 

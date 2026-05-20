@@ -235,17 +235,17 @@ window.loadTTable = async () => {
     }
     tests.forEach((t, i) => {
       box.innerHTML += `
-        <div class="test-item-row" style="background:white; padding:15px; margin-bottom:15px; border-radius:12px; border:1px solid #e2e8f0; position:relative;">
+        <div class="test-item-row">
           <div class="test-content">
-            <b style="display:block; margin-bottom:5px; padding-right:50px;">${i + 1}. ${t.question}</b>
-            <span style="color:var(--primary); font-weight:bold;">Javob: ${t.correct_answer}</span>
+            <b>${i + 1}. ${t.question}</b>
+            <span>Javob: ${t.correct_answer}</span>
           </div>
-          <div style="position:absolute; top:10px; right:10px; display:flex; gap:8px;">
-            <button class="btn" style="padding:4px 8px; background:#2563eb; color:white; border:none; border-radius:6px; cursor:pointer; font-size:12px;" onclick="editTest(${t.id}, '${t.question.replace(/'/g, "\\'")}', '${t.correct_answer.replace(/'/g, "\\'")}', '${JSON.stringify(t.options).replace(/'/g, "\\'")}')" title="Tahrirlash">
-              <i class="ri-edit-line"></i> Tahrirlash
+          <div class="test-action-buttons">
+            <button class="btn-edit-test" onclick="editTest(${t.id}, '${t.question.replace(/'/g, "\\'")}', '${t.correct_answer.replace(/'/g, "\\'")}', '${JSON.stringify(t.options).replace(/'/g, "\\'")}')" title="Tahrirlash">
+              <i class="ri-edit-line"></i>
             </button>
-            <button class="btn" style="padding:4px 8px; background:#dc2626; color:white; border:none; border-radius:6px; cursor:pointer; font-size:12px;" onclick="delT(${t.id})" title="Savolni o'chirish">
-              <i class="ri-close-line"></i> O'chirish
+            <button class="btn-delete-test" onclick="delT(${t.id})" title="Savolni o'chirish">
+              <i class="ri-close-line"></i>
             </button>
           </div>
         </div>`;

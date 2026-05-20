@@ -249,7 +249,6 @@ window.openAuth = async (id) => {
 
 // ─── TEST BOSHLASH ─────────────────────────────────────────────────────────────
 window.startQuiz = () => {
-  // Jamoa nomi ixtiyoriy qilindi, faqat Ism kiritish majburiy
   if (!document.getElementById('st-name').value.trim()) {
     return alert("Iltimos, Ism Familiyangizni kiriting!");
   }
@@ -298,7 +297,6 @@ async function finish() {
   let team = document.getElementById('st-team').value.trim();
   const name = document.getElementById('st-name').value.trim();
 
-  // Agar jamoa kiritilmagan bo'lsa chiziqcha qo'yiladi
   if (!team) team = "-";
 
   document.getElementById('f-team').innerText = team;
@@ -408,7 +406,6 @@ window.downloadSinglePDF = async (className) => {
     const results = await api('/api/classes/' + className + '/results');
     const rows = results.map((r, idx) => [idx + 1, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
     
-    // Sarlavha xavfsiz matnga o'tkazildi
     doc.text(className + " Sinf Natijalari", 14, 15);
     doc.autoTable({ head: [['O\'rin', 'Jamoa', 'Ism', 'Ball', 'Vaqt']], body: rows, startY: 20, theme: 'grid' });
     doc.save(`${className}_natijalari.pdf`);
@@ -455,7 +452,6 @@ window.downloadTop3PDF = async () => {
   try {
     const classes = allGlobalClasses.length > 0 ? allGlobalClasses : await api('/api/classes');
     doc.setFontSize(16);
-    // Emojilar olib tashlandi, matn tozalandi
     doc.text("STEAM PLAZA - TOP-3 G'OLIBLAR (SINFLAR KESIMIDA)", 14, y);
     y += 12;
 
@@ -466,8 +462,6 @@ window.downloadTop3PDF = async () => {
       if (top3.length > 0) {
         if (y > 240) { doc.addPage(); y = 20; }
         doc.setFontSize(14);
-        
-        // Tushunarsiz belgi chiqarmaslik uchun kubok belgisi olib tashlandi
         doc.text(`${c.id} Sinf G'oliblari`, 14, y);
 
         const rows = top3.map((r, idx) => {
@@ -483,7 +477,7 @@ window.downloadTop3PDF = async () => {
           body: rows, 
           startY: y + 3, 
           theme: 'striped',
-          headStyles: { fillColor: [16, 185, 129] } // Yashil sarlavha paneli
+          headStyles: { fillColor: [16, 185, 129] }
         });
         y = doc.lastAutoTable.finalY + 12;
       }

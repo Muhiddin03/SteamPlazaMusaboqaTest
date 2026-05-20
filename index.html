@@ -145,8 +145,10 @@
     <div id="m-login" class="modal">
         <div class="modal-box" style="max-width:320px">
             <h3>Admin Kirish</h3>
-            <input type="password" id="adm-pass" placeholder="Parolni kiriting">
-            <button class="btn btn-primary" style="width:100%" onclick="verifyAdmin()">KIRISH</button>
+            <form onsubmit="verifyAdmin(event)">
+                <input type="password" id="adm-pass" placeholder="Parolni kiriting" required autocomplete="current-password">
+                <button type="submit" class="btn btn-primary" style="width:100%">KIRISH</button>
+            </form>
             <p onclick="closeM('m-login')" style="cursor:pointer; margin-top:20px; color:#64748b">Yopish</p>
         </div>
     </div>

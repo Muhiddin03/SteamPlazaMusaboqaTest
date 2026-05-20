@@ -24,8 +24,7 @@
     <aside class="sidebar" id="admin-sidebar">
         <div class="hamburger" onclick="toggleSidebar()"><i class="ri-menu-2-fill"></i></div>
         <div class="side-item active" onclick="switchTab('t-classes', this)"><i class="ri-grid-fill"></i> <span>Sinflar</span></div>
-        <div class="side-item" onclick="switchTab('t-tests', this)"><i class="ri-folder-add-fill"></i> <span>Testlar bazasi</span></div>
-        <div class="side-item" onclick="switchTab('t-all-tests-view', this)"><i class="ri-list-check-2"></i> <span>Barcha Testlar</span></div>
+        <div class="side-item" onclick="switchTab('t-tests', this)"><i class="ri-folder-add-fill"></i> <span>Testlar</span></div>
         <div class="side-item" onclick="switchTab('t-results', this)"><i class="ri-line-chart-fill"></i> <span>Natijalar</span></div>
         <div class="side-item" onclick="switchTab('t-settings', this)"><i class="ri-settings-4-fill"></i> <span>Sozlamalar</span></div>
         <button class="btn btn-danger" style="margin-top:auto" onclick="location.reload()">
@@ -42,8 +41,8 @@
         <div id="v-auth" class="page-view hidden">
             <div class="card" style="max-width:400px; margin: 40px auto; text-align:center">
                 <h2 id="sel-c-title" style="color:var(--primary)">Sinf</h2>
-                <input type="text" id="st-name" placeholder="Ism Familiya">
-                <input type="text" id="st-team" placeholder="Jamoa nomi">
+                <input type="text" id="st-name" placeholder="Ism Familiya (Majburiy)">
+                <input type="text" id="st-team" placeholder="Jamoa nomi (Ixtiyoriy)">
                 <button class="btn btn-primary" style="width:100%; justify-content:center" onclick="startQuiz()">TESTNI BOSHLASH</button>
                 <button class="btn" style="width:100%; margin-top:10px; background:none; justify-content:center" onclick="goHome()">ORQAGA</button>
             </div>
@@ -77,7 +76,8 @@
                         <button type="button" class="btn" style="padding: 4px 10px; font-size: 12px; background: #e2e8f0;" onclick="selectAllParallelClasses()">Shu paralleldagilarni tanlash</button>
                         <button type="button" class="btn" style="padding: 4px 10px; font-size: 12px; background: #e2e8f0;" onclick="clearSelectionClasses()">Tozalash</button>
                     </div>
-                    <div id="classes-checkbox-list" style="display: flex; flex-wrap: wrap; gap: 15px; padding-top: 5px;"></div>
+                    <div id="classes-checkbox-list" style="display: flex; flex-wrap: wrap; gap: 15px; padding-top: 5px;">
+                        </div>
                 </div>
 
                 <input type="text" id="adm-q" placeholder="Savol matni">
@@ -91,35 +91,13 @@
             <div id="adm-t-list" class="grid"></div>
         </div>
 
-        <div id="t-all-tests-view" class="tab-content">
-            <h1>Barcha Yaratilgan Testlar</h1>
-            <div class="card" style="padding:0; overflow-x:auto;">
-                <table style="width:100%; border-collapse:collapse; text-align:left;">
-                    <thead style="background:#f1f5f9;">
-                        <tr>
-                            <th style="padding:12px; text-align:center; width:60px;">T/r</th>
-                            <th style="padding:12px; text-align:center; width:100px;">Sinf</th>
-                            <th style="padding:12px;">Savol va Variantlar</th>
-                            <th style="padding:12px; text-align:center; width:120px;">Sana</th>
-                            <th style="padding:12px; text-align:center; width:120px;">Amal</th>
-                        </tr>
-                    </thead>
-                    <tbody id="all-tests-tbody">
-                        <tr>
-                            <td colspan="5" style="text-align:center; padding:20px; color:#64748b;">Yuklanmoqda...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
         <div id="t-results" class="tab-content">
             <div style="margin-bottom: 20px; display: flex; gap: 15px;">
                 <button class="btn btn-primary" onclick="downloadAllResultsPDF()">
                     <i class="ri-file-pdf-line"></i> BARCHA NATIJALAR (PDF)
                 </button>
                 <button class="btn" style="background: #eab308; color: white;" onclick="downloadTop3PDF()">
-                    <i class="ri-trophy-line"></i> FAQAT TOP-3 G'OLIBLAR (PDF)
+                    <i class="ri-trophy-line"></i> FAQAT TOP-3 GO'LIBLAR (PDF)
                 </button>
             </div>
             <div id="res-grid" class="grid"></div>
@@ -165,33 +143,6 @@
             <input type="password" id="adm-pass" placeholder="Parolni kiriting">
             <button class="btn btn-primary" style="width:100%" onclick="verifyAdmin()">KIRISH</button>
             <p onclick="closeM('m-login')" style="cursor:pointer; margin-top:20px; color:#64748b">Yopish</p>
-        </div>
-    </div>
-
-    <div id="m-edit-test" class="modal">
-        <div class="modal-box" style="max-width:500px; text-align:left;">
-            <h3>Testni Tahrirlash</h3>
-            <input type="hidden" id="edit-q-id">
-            
-            <label style="font-weight:bold; display:block; margin: 10px 0 5px 0;">Sinf:</label>
-            <select id="edit-q-class" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ccc;"></select>
-            
-            <label style="font-weight:bold; display:block; margin: 10px 0 5px 0;">Savol matni:</label>
-            <input type="text" id="edit-q-text" placeholder="Savol matni" style="width:100%;">
-            
-            <label style="font-weight:bold; display:block; margin: 10px 0 5px 0;">To'g'ri javob:</label>
-            <input type="text" id="edit-q-correct" placeholder="To'g'ri javob" style="width:100%; border-color:var(--primary)">
-            
-            <label style="font-weight:bold; display:block; margin: 10px 0 5px 0;">Xato variant 1:</label>
-            <input type="text" id="edit-q-w1" placeholder="Xato 1" style="width:100%;">
-            
-            <label style="font-weight:bold; display:block; margin: 10px 0 5px 0;">Xato variant 2:</label>
-            <input type="text" id="edit-q-w2" placeholder="Xato 2" style="width:100%;">
-            
-            <div style="display:flex; gap:10px; margin-top:20px;">
-                <button class="btn btn-primary" style="flex:1; justify-content:center" onclick="saveEditedTest()">SAQLASH</button>
-                <button class="btn" style="flex:1; justify-content:center; background:#e2e8f0;" onclick="closeM('m-edit-test')">BEKOR QILISH</button>
-            </div>
         </div>
     </div>
 

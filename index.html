@@ -65,7 +65,13 @@
         </div>
 
         <div id="t-tests" class="tab-content">
-            <h1>Savollar bazasi</h1>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h1 style="margin:0;">Savollar bazasi</h1>
+                <button class="btn" style="background:#4f46e5; color:white;" onclick="downloadQuestionsPDF()">
+                    <i class="ri-file-pdf-line"></i> SAVOLLARNI PDF YUKLASH
+                </button>
+            </div>
+            
             <div class="card" style="margin-bottom:30px">
                 <label style="font-weight: bold; display: block; margin-bottom: 5px;">Asosiy sinfni tanlang (Ko'rish uchun):</label>
                 <select id="adm-sel-c" onchange="loadTTable()"></select>
@@ -76,8 +82,7 @@
                         <button type="button" class="btn" style="padding: 4px 10px; font-size: 12px; background: #e2e8f0;" onclick="selectAllParallelClasses()">Shu paralleldagilarni tanlash</button>
                         <button type="button" class="btn" style="padding: 4px 10px; font-size: 12px; background: #e2e8f0;" onclick="clearSelectionClasses()">Tozalash</button>
                     </div>
-                    <div id="classes-checkbox-list" style="display: flex; flex-wrap: wrap; gap: 15px; padding-top: 5px;">
-                        </div>
+                    <div id="classes-checkbox-list" style="display: flex; flex-wrap: wrap; gap: 15px; padding-top: 5px;"></div>
                 </div>
 
                 <input type="text" id="adm-q" placeholder="Savol matni">
@@ -86,7 +91,7 @@
                     <input type="text" id="adm-w1" placeholder="Xato 1">
                     <input type="text" id="adm-w2" placeholder="Xato 2">
                 </div>
-                <button class="btn btn-primary" style="margin-top: 15px;" onclick="saveTest()"><i class="ri-save-line"></i> SAQLASH</button>
+                <button class="btn btn-primary" id="save-test-btn" style="margin-top: 15px;" onclick="saveTest()"><i class="ri-save-line"></i> SAQLASH</button>
             </div>
             <div id="adm-t-list" class="grid"></div>
         </div>

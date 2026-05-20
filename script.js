@@ -1,4 +1,17 @@
-// ─── API URL - Yangi Railway URL manzilingiz ───
+// ─── UI GLOBAL FUNKSIYALARNI WINDOW'GA BOG'LASH (ReferenceError oldini olish uchun eng tepada) ───
+window.toggleSidebar = () => document.getElementById('admin-sidebar').classList.toggle('collapsed');
+window.openLogin = () => document.getElementById('m-login').classList.add('active');
+window.closeM = (id) => document.getElementById(id).classList.remove('active');
+window.goHome = () => {
+  document.getElementById('v-home').classList.remove('hidden');
+  document.getElementById('v-auth').classList.add('hidden');
+};
+window.closeRes = () => {
+  document.getElementById('res-grid').classList.remove('hidden');
+  document.getElementById('res-detail').classList.add('hidden');
+};
+
+// ─── API URL ───
 const API = "https://steamplazamusaboqatestbackend-production.up.railway.app";
 
 // ─── STATE ─────────────────────────────────────────────────────────────────────
@@ -7,7 +20,7 @@ let tList = [];
 let qIdx = 0;
 let score = 0;
 let allGlobalClasses = []; 
-let editingTestId = null; // Tahrirlanayotgan savol ID si uchun shtat
+let editingTestId = null;
 
 // ─── HELPER: API CALL ──────────────────────────────────────────────────────────
 async function api(path, method = 'GET', body = null) {
@@ -29,21 +42,9 @@ function getGrade(name) {
   return name.split('-')[0];
 }
 
-// ─── UI HELPERS ────────────────────────────────────────────────────────────────
-window.toggleSidebar = () => document.getElementById('admin-sidebar').classList.toggle('collapsed');
-window.openLogin = () => document.getElementById('m-login').classList.add('active');
-window.closeM = (id) => document.getElementById(id).classList.remove('active');
-window.goHome = () => {
-  document.getElementById('v-home').classList.remove('hidden');
-  document.getElementById('v-auth').classList.add('hidden');
-};
-window.closeRes = () => {
-  document.getElementById('res-grid').classList.remove('hidden');
-  document.getElementById('res-detail').classList.add('hidden');
-};
-
 // ─── ADMIN LOGIN ───────────────────────────────────────────────────────────────
-window.verifyAdmin = () => {
+window.verifyAdmin = (event) => {
+  if (event) event.preventDefault(); // Form yuborilishini to'xtatish
   if (document.getElementById('adm-pass').value === "1234") {
     document.getElementById('v-home').classList.add('hidden');
     document.getElementById('m-login').classList.remove('active');
@@ -72,45 +73,48 @@ async function loadData() {
   const sel = document.getElementById('adm-sel-c');
   const chkBoxList = document.getElementById('classes-checkbox-list');
 
-  sg.innerHTML = "<p>Yuklanmoqda...</p>";
+  if(sg) sg.innerHTML = "<p>Yuklanmoqda...</p>";
 
   try {
     const classes = await api('/api/classes');
     allGlobalClasses = classes; 
 
-    sg.innerHTML = "";
-    ag.innerHTML = "";
-    sel.innerHTML = "<option value=''>Sinf tanlang</option>";
+    if(sg) sg.innerHTML = "";
+    if(ag) ag.innerHTML = "";
+    if(sel) sel.innerHTML = "<option value=''>Sinf tanlang</option>";
     if(chkBoxList) chkBoxList.innerHTML = "";
 
     if (classes.length === 0) {
-      sg.innerHTML = "<p style='color:#64748b'>Hech qanday sinf yo'q</p>";
+      if(sg) sg.innerHTML = "<p style='color:#64748b'>Hech qanday sinf yo'q</p>";
     }
 
     classes.forEach(c => {
-      // SyntaxError oldini olish uchun elementlarni xavfsiz yaratamiz va event bog'laymiz
-      const studentCard = document.createElement('div');
-      studentCard.className = "card";
-      studentCard.innerHTML = `<h3>${c.id}</h3>`;
-      studentCard.addEventListener('click', () => openAuth(c.id));
-      sg.appendChild(studentCard);
+      if(sg) {
+        const studentCard = document.createElement('div');
+        studentCard.className = "card";
+        studentCard.innerHTML = `<h3>${c.id}</h3>`;
+        studentCard.addEventListener('click', () => window.openAuth(c.id));
+        sg.appendChild(studentCard);
+      }
 
-      const adminCard = document.createElement('div');
-      adminCard.className = "card";
-      adminCard.style.cssText = "display:flex; justify-content:space-between; align-items:center";
-      adminCard.innerHTML = `<b>${c.id}</b>`;
-      
-      const delBtn = document.createElement('i');
-      delBtn.className = "ri-delete-bin-line icon-btn";
-      delBtn.style.cssText = "cursor:pointer; color:red";
-      delBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        delClass(c.id);
-      });
-      adminCard.appendChild(delBtn);
-      ag.appendChild(adminCard);
+      if(ag) {
+        const adminCard = document.createElement('div');
+        adminCard.className = "card";
+        adminCard.style.cssText = "display:flex; justify-content:space-between; align-items:center";
+        adminCard.innerHTML = `<b>${c.id}</b>`;
+        
+        const delBtn = document.createElement('i');
+        delBtn.className = "ri-delete-bin-line icon-btn";
+        delBtn.style.cssText = "cursor:pointer; color:red;";
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          window.delClass(c.id);
+        });
+        adminCard.appendChild(delBtn);
+        ag.appendChild(adminCard);
+      }
 
-      sel.innerHTML += `<option value="${c.id}">${c.id}</option>`;
+      if(sel) sel.innerHTML += `<option value="${c.id}">${c.id}</option>`;
       
       if(chkBoxList) {
         chkBoxList.innerHTML += `
@@ -121,11 +125,11 @@ async function loadData() {
       }
     });
   } catch (err) {
-    sg.innerHTML = `<p style="color:red">Xatolik: ${err.message}. API URL to'g'riligini tekshiring.</p>`;
+    if(sg) sg.innerHTML = `<p style="color:red">Xatolik: ${err.message}</p>`;
   }
 }
 
-// ─── PARALLEL CLASSED SELECTION HELPERS ───────────────────────────────────────
+// ─── PARALLEL CLASSES SELECTION HELPERS ───────────────────────────────────────
 window.selectAllParallelClasses = () => {
   const currentSelectedClass = document.getElementById('adm-sel-c').value;
   if(!currentSelectedClass) return alert("Avval yuqoridan asosiy sinfni tanlang!");
@@ -191,7 +195,7 @@ window.saveTest = async () => {
   const bodyData = { question, correct_answer, wrong1, wrong2 };
   
   if (editingTestId) {
-    bodyData.id = editingTestId; // Agar tahrirlanayotgan bo'lsa ID ni yuboramiz
+    bodyData.id = editingTestId;
   } else {
     bodyData.targetClasses = targetClasses;
   }
@@ -199,13 +203,11 @@ window.saveTest = async () => {
   try {
     await api('/api/classes/' + classId + '/tests', 'POST', bodyData);
     
-    // Formani tozalash
     document.getElementById('adm-q').value = "";
     document.getElementById('adm-a').value = "";
     document.getElementById('adm-w1').value = "";
     document.getElementById('adm-w2').value = "";
     
-    // Tahrirlash rejimini yopish
     if(editingTestId) {
       editingTestId = null;
       document.getElementById('save-test-btn').innerHTML = `<i class="ri-save-line"></i> SAQLASH`;
@@ -218,7 +220,7 @@ window.saveTest = async () => {
   }
 };
 
-// ─── SAVOLLAR JADVALINI YUKLASH (Tahrirlash va O'chirish yuklamasi bilan) ──────
+// ─── SAVOLLAR JADVALINI YUKLASH ─────────────────────────────────────────────
 window.loadTTable = async () => {
   const classId = document.getElementById('adm-sel-c').value;
   const box = document.getElementById('adm-t-list');
@@ -265,13 +267,13 @@ window.loadTTable = async () => {
       delBtn.className = "ri-close-line";
       delBtn.title = "Savolni o'chirish";
       delBtn.style.color = "red";
-      delBtn.addEventListener('click', () => delT(t.id));
+      delBtn.addEventListener('click', () => window.delT(t.id));
       row.querySelector('.action-q-btns').appendChild(delBtn);
 
       box.appendChild(row);
     });
   } catch (err) {
-    box.innerHTML = "<p style="color:red">Xatolik: " + err.message + "</p>";
+    box.innerHTML = "<p style='color:red'>Xatolik: " + err.message + "</p>";
   }
 };
 
@@ -284,7 +286,7 @@ function editT(test, options) {
   document.getElementById('adm-w2').value = options[2] || '';
   
   document.getElementById('save-test-btn').innerHTML = `<i class="ri-save-line"></i> YANGILASH (TAHRIR)`;
-  document.getElementById('bulk-classes-container').style.display = "none"; // Tahrirlashda ommaviy qo'shish yopiladi
+  document.getElementById('bulk-classes-container').style.display = "none";
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -620,5 +622,7 @@ window.clearDb = async () => {
   }
 };
 
-// ─── ISHGA TUSHIRISH ───────────────────────────────────────────────────────────
-loadData();
+// ─── INITIAL LOAD ──────────────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", () => {
+  loadData();
+});

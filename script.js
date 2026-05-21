@@ -96,10 +96,29 @@ async function loadData() {
 
       const admCard = document.createElement('div');
       admCard.className = 'card';
-      admCard.style.cssText = 'display:flex; justify-content:space-between; align-items:center';
-      admCard.innerHTML = `<b>${c.id}</b><i class="ri-delete-bin-line icon-btn" style="cursor:pointer; color:red" title="O'chirish"></i>`;
-      admCard.querySelector('i').addEventListener('click', () => delClass(c.id));
+      admCard.dataset.classId = c.id;
+      admCard.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:16px 20px;';
+      admCard.innerHTML = `
+        <div style="display:flex;align-items:center;gap:12px;">
+          <b style="font-size:16px;">${c.id}</b>
+          <span class="test-count-badge" style="background:#f0fdf4;color:#059669;font-size:12px;font-weight:800;padding:3px 10px;border-radius:20px;border:1.5px solid #bbf7d0;">...</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <i class="ri-delete-bin-line icon-btn" style="cursor:pointer;color:red;" title="Sinfni o'chirish"></i>
+        </div>`;
+      admCard.querySelector('i').addEventListener('click', (e) => { e.stopPropagation(); delClass(c.id); });
       ag.appendChild(admCard);
+
+      // Har sinf uchun test sonini async yukla
+      api('/api/classes/' + encodeURIComponent(c.id) + '/tests').then(tests => {
+        const badge = admCard.querySelector('.test-count-badge');
+        if (badge) badge.textContent = tests.length + ' ta test';
+        if (tests.length === 0) {
+          badge.style.background = '#fef2f2';
+          badge.style.color = '#dc2626';
+          badge.style.borderColor = '#fecaca';
+        }
+      }).catch(() => {});
 
       sel.innerHTML += `<option value="${c.id}">${c.id}</option>`;
 
@@ -144,6 +163,18 @@ window.addClass = async () => {
     await api('/api/classes', 'POST', { id: val });
     document.getElementById('new-c-input').value = "";
     loadData();
+  } catch (err) {
+    alert("Xatolik: " + err.message);
+  }
+};
+
+// ─── TAKRORIY SAVOLLARNI TOZALASH ─────────────────────────────────────────────
+window.dedupClass = async (id) => {
+  if (!confirm(id + " sinfidagi TAKRORIY savollar o'chirilsinmi?\nHar savoldan faqat bittasi qoladi.")) return;
+  try {
+    const res = await api('/api/classes/' + encodeURIComponent(id) + '/dedup', 'DELETE');
+    alert(id + ": " + res.deleted + " ta takroriy savol o'chirildi!");
+    loadTTable();
   } catch (err) {
     alert("Xatolik: " + err.message);
   }
@@ -374,8 +405,22 @@ window.saveEditTest = async (testId) => {
 
   if (!question || !correct_answer) return alert("Savol va to'g'ri javob kerak!");
 
+  const body = { question, correct_answer, wrong1, wrong2 };
   try {
-    await api('/api/tests/' + testId, 'PUT', { question, correct_answer, wrong1, wrong2 });
+    // Avval PUT, keyin PATCH bilan urinib ko'ramiz
+    const res = await fetch(API + '/api/tests/' + testId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (res.status === 404 || res.status === 405) {
+      // PUT ishlamadi — server yangilanmagan, to'g'ridan DB'dan o'qib qayta yozamiz
+      throw new Error('Server yangi versiyasi Railway\'ga push qilinmagan! server.js ni GitHub\'ga push qilib, Railway\'da redeploy qiling.');
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Server xatosi');
+    }
     loadTTable();
   } catch (err) {
     alert("Xatolik: " + err.message);
@@ -429,12 +474,14 @@ window.downloadTestsPDF = async (classId) => {
       theme: 'grid',
       headStyles: { fillColor: [16, 185, 129] },
       columnStyles: {
-        0: { cellWidth: 10 },
-        1: { cellWidth: 90 },
+        0: { cellWidth: 12 },
+        1: { cellWidth: 80 },
         2: { cellWidth: 45 },
         3: { cellWidth: 45 }
       },
-      styles: { fontSize: 9, cellPadding: 4 }
+      tableWidth: 'wrap',
+      margin: { left: 10, right: 10 },
+      styles: { fontSize: 9, cellPadding: 3, overflow: 'linebreak' }
     });
 
     doc.save(`${classId}_savollar.pdf`);
@@ -720,6 +767,23 @@ window.clearDb = async () => {
     } catch (err) {
       alert("Xatolik: " + err.message);
     }
+  }
+};
+
+// ─── BARCHA SINFLARDAGI DUPLIKAT TESTLARNI TOZALASH ───────────────────────────
+window.dedupAllClasses = async () => {
+  if (!confirm("Barcha sinflardagi TAKRORIY (dublikat) testlar o'chiriladi. Davom etasizmi?")) return;
+  try {
+    const classes = await api('/api/classes');
+    let totalDeleted = 0;
+    for (const c of classes) {
+      const result = await api('/api/classes/' + encodeURIComponent(c.id) + '/dedup', 'DELETE');
+      totalDeleted += result.deleted || 0;
+    }
+    alert("Tayyor! Jami " + totalDeleted + " ta takroriy savol o'chirildi.");
+    loadTTable();
+  } catch (err) {
+    alert("Xatolik: " + err.message);
   }
 };
 

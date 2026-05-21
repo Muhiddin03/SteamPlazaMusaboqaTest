@@ -759,6 +759,43 @@ window.downloadTop3PDF = async () => {
 };
 
 // ─── BAZANI TOZALASH ───────────────────────────────────────────────────────────
+// ─── SINFDAN PARALLEL SINFLARGA TESTLARNI KO'PAYTIRISH ───────────────────────
+window.copyToParallel = async () => {
+  try {
+    const classes = await api('/api/classes');
+    if (classes.length === 0) return alert("Sinflar yo'q");
+
+    const classNames = classes.map(c => c.id).join(', ');
+    const chosen = prompt(
+      "Qaysi sinf testlarini parallel sinflarga tarqatmoqchisiz?\n\n" +
+      "Mavjud sinflar: " + classNames + "\n\n" +
+      "Sinf nomini kiriting (masalan: 2-A):"
+    );
+    if (!chosen) return;
+
+    const found = classes.find(c => c.id.toLowerCase() === chosen.trim().toLowerCase());
+    if (!found) return alert("'" + chosen + "' sinfi topilmadi!");
+
+    const grade = found.id.split('-')[0];
+    const parallels = classes.filter(c => c.id.split('-')[0] === grade && c.id !== found.id);
+    if (parallels.length === 0) return alert(grade + "-sinf parallel sinflari topilmadi!");
+
+    if (!confirm(
+      found.id + " dagi testlar quyidagi sinflarga ham qo'shiladi:\n" +
+      parallels.map(c => c.id).join(', ') + "\n\n" +
+      "Allaqachon mavjud testlar o'tkazib yuboriladi. Davom etasizmi?"
+    )) return;
+
+    const result = await api('/api/classes/' + encodeURIComponent(found.id) + '/copy-to-parallel', 'POST');
+    alert(
+      "Tayyor! " + found.id + " dan " + result.parallelClasses.join(', ') +
+      " sinflariga " + result.totalAdded + " ta test qo'shildi."
+    );
+  } catch (err) {
+    alert("Xatolik: " + err.message);
+  }
+};
+
 window.clearDb = async () => {
   if (confirm("Hammasi o'chadi! Davom etasizmi?")) {
     try {
@@ -770,17 +807,26 @@ window.clearDb = async () => {
   }
 };
 
-// ─── BARCHA SINFLARDAGI DUPLIKAT TESTLARNI TOZALASH ───────────────────────────
+// ─── SINFDAGI DUPLIKAT TESTLARNI TOZALASH ────────────────────────────────────
 window.dedupAllClasses = async () => {
-  if (!confirm("Barcha sinflardagi TAKRORIY (dublikat) testlar o'chiriladi. Davom etasizmi?")) return;
   try {
     const classes = await api('/api/classes');
-    let totalDeleted = 0;
-    for (const c of classes) {
-      const result = await api('/api/classes/' + encodeURIComponent(c.id) + '/dedup', 'DELETE');
-      totalDeleted += result.deleted || 0;
-    }
-    alert("Tayyor! Jami " + totalDeleted + " ta takroriy savol o'chirildi.");
+    if (classes.length === 0) return alert("Sinflar yo'q");
+
+    // Qaysi sinfni tozalash kerakligini so'raymiz
+    const classNames = classes.map(c => c.id).join(', ');
+    const chosen = prompt(
+      "Qaysi sinfdagi takroriy testlarni o'chirmoqchisiz?\n\nMavjud sinflar: " + classNames + "\n\nSinf nomini kiriting (masalan: 2-A):"
+    );
+    if (!chosen) return;
+
+    const found = classes.find(c => c.id.toLowerCase() === chosen.trim().toLowerCase());
+    if (!found) return alert("'" + chosen + "' sinfi topilmadi!");
+
+    if (!confirm(found.id + " sinfidagi TAKRORIY testlar o'chiriladi. Boshqa sinflarga ta'sir etmaydi. Davom etasizmi?")) return;
+
+    const result = await api('/api/classes/' + encodeURIComponent(found.id) + '/dedup', 'DELETE');
+    alert("Tayyor! " + found.id + " sinfidan " + (result.deleted || 0) + " ta takroriy savol o'chirildi.");
     loadTTable();
   } catch (err) {
     alert("Xatolik: " + err.message);

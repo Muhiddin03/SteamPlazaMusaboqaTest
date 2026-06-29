@@ -88,6 +88,23 @@
                 </div>
                 <button class="btn btn-primary" style="margin-top: 15px;" onclick="saveTest()"><i class="ri-save-line"></i> SAQLASH</button>
             </div>
+            <div class="card" style="border: 2px dashed #10b981; background:#f0fdf8; margin-bottom:20px;">
+    <h3 style="color:#059669; margin-bottom:8px;">
+        <i class="ri-upload-cloud-2-line"></i> Ommaviy test yuklash (JSON / CSV)
+    </h3>
+    <p style="margin-bottom:12px; color:#64748b; font-size:14px;">
+        Tayyor testlaringizni JSON yoki CSV formatida yuklang. 
+        <b>class_id, question, correct_answer</b> maydonlari shart.
+    </p>
+    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+        <input type="file" id="bulk-file-input" accept=".json,.csv" 
+               style="width:auto; margin:0; cursor:pointer;">
+        <button class="btn btn-primary" onclick="uploadBulkTests()">
+            <i class="ri-upload-2-line"></i> YUKLASH
+        </button>
+    </div>
+    <div id="bulk-status" style="margin-top:12px; font-size:14px; font-weight:700;"></div>
+</div>
             <div id="adm-t-list" class="grid"></div>
         </div>
 

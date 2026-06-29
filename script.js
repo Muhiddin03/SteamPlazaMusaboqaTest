@@ -64,6 +64,70 @@ window.switchTab = (id, el) => {
   if (id === 't-results') loadResGrid();
 };
 
+// ─── BULK TEST YUKLASH ─────────────────────────────────────────────────────────
+window.uploadBulkTests = async () => {
+  const input = document.getElementById('bulk-file-input');
+  const statusEl = document.getElementById('bulk-status');
+  const file = input.files[0];
+  if (!file) return alert("Fayl tanlang!");
+
+  statusEl.innerHTML = "<span style='color:#64748b'>O'qilmoqda...</span>";
+
+  const text = await file.text();
+  let tests = [];
+
+  try {
+    if (file.name.endsWith('.json')) {
+      tests = JSON.parse(text);
+    } else if (file.name.endsWith('.csv')) {
+      const lines = text.trim().split('\n').filter(l => l.trim());
+      const headers = lines[0].split(',').map(h => h.trim());
+      tests = lines.slice(1).map(line => {
+        const vals = line.split(',').map(v => v.trim());
+        const obj = {};
+        headers.forEach((h, i) => obj[h] = vals[i] || '');
+        return obj;
+      });
+    } else {
+      return alert("Faqat .json yoki .csv fayl!");
+    }
+  } catch (e) {
+    statusEl.innerHTML = "<span style='color:red'>Format xatosi: " + e.message + "</span>";
+    return;
+  }
+
+  // Validatsiya
+  const invalid = tests.filter(t => !t.class_id || !t.question || !t.correct_answer);
+  if (invalid.length > 0) {
+    statusEl.innerHTML = `<span style='color:red'>${invalid.length} ta satrda class_id/question/correct_answer yo'q!</span>`;
+    return;
+  }
+
+  let added = 0, skipped = 0, errors = 0;
+  statusEl.innerHTML = `<span style='color:#64748b'>0/${tests.length} yuborilmoqda...</span>`;
+
+  for (let i = 0; i < tests.length; i++) {
+    const t = tests[i];
+    try {
+      const res = await api('/api/classes/' + encodeURIComponent(t.class_id) + '/tests', 'POST', {
+        question: t.question,
+        correct_answer: t.correct_answer,
+        wrong1: t.wrong1 || '',
+        wrong2: t.wrong2 || '',
+        targetClasses: [t.class_id]
+      });
+      if (res.skipped) skipped++; else added++;
+    } catch (e) {
+      errors++;
+    }
+    statusEl.innerHTML = `<span style='color:#64748b'>${i+1}/${tests.length} yuborilmoqda...</span>`;
+  }
+
+  statusEl.innerHTML = `<span style='color:#059669'>✓ Tayyor! +${added} qo'shildi, ${skipped} takror o'tkazildi${errors ? ', ' + errors + ' xato' : ''}</span>`;
+  input.value = "";
+  loadData();
+};
+
 // ─── LOAD DATA (Sinflar ro'yxati) ─────────────────────────────────────────────
 async function loadData() {
   const sg = document.getElementById('st-grid');

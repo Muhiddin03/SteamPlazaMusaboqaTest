@@ -106,10 +106,15 @@
     const forbidden = [
       'Ilovadan, brauzerdan yoki test oynasidan chiqish',
       'Boshqa ilova, sayt yoki sun\'iy intellekt (ChatGPT, Google va h.k.) ochish',
-      'Kitob, daftar, boshqa telefon yoki birovning yordamidan foydalanish',
+      s.allow_paper
+        ? 'Kitob, boshqa telefon yoki birovning yordamidan foydalanish'
+        : 'Kitob, daftar, boshqa telefon yoki birovning yordamidan foydalanish',
       'Nusxalash, skrinshot olish, ekranni bo\'lish, boshqa varaq ochish'
     ];
     const info = [
+      s.allow_paper
+        ? 'Qog\'ozda misol ishlashga ruxsat bor. Ekrandagi ✏️ qoralamadan ham foydalanishingiz mumkin'
+        : 'Misol ishlash uchun ekrandagi ✏️ qoralamadan foydalaning',
       `Har bir savolga ${s.question_time_sec} soniya beriladi — vaqt tugasa savol javobsiz qoladi`,
       s.max_violations > 0 ? `${s.max_violations} marta qoidabuzarlik qilinsa, test avtomatik to'xtatiladi` : null,
       'Testni faqat bir marta topshirish mumkin. Barcha harakatlaringiz o\'qituvchiga ko\'rinadi'
@@ -212,6 +217,7 @@
       });
       $('quiz-body').scrollTop = 0;
       $('quiz-body').classList.remove('leaving');
+      clearDraft(); // har savol uchun toza qoralama
     }
     setBusy(false);
     clearInterval(S.timers.tick);
@@ -630,6 +636,86 @@
     }
   }
 
+  // ─── QORALAMA (ekranda barmoq bilan misol ishlash) ─────────────────────────
+  const draft = { ctx: null, drawing: false, last: null };
+
+  function openDraft() {
+    const panel = $('draft');
+    panel.hidden = false;
+    const c = $('draft-canvas');
+    const rect = c.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.round(rect.width * dpr);
+    const hgt = Math.round(rect.height * dpr);
+    if (c.width !== w || c.height !== hgt) {
+      // O'lcham o'zgarsa chizilgan narsa saqlanib qoladi
+      const old = c.width && c.height ? c.toDataURL() : null;
+      c.width = w;
+      c.height = hgt;
+      draft.ctx = c.getContext('2d');
+      draft.ctx.scale(dpr, dpr);
+      draft.ctx.lineCap = 'round';
+      draft.ctx.lineJoin = 'round';
+      draft.ctx.lineWidth = 2.5;
+      draft.ctx.strokeStyle = '#0f172a';
+      if (old) {
+        const img = new Image();
+        img.onload = () => draft.ctx.drawImage(img, 0, 0, rect.width, rect.height);
+        img.src = old;
+      }
+    }
+  }
+
+  function clearDraft() {
+    const c = $('draft-canvas');
+    if (draft.ctx) draft.ctx.clearRect(0, 0, c.width, c.height);
+  }
+
+  function draftPoint(e) {
+    const r = $('draft-canvas').getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  function bindDraft() {
+    const c = $('draft-canvas');
+    c.addEventListener('pointerdown', e => {
+      if (!draft.ctx) return;
+      e.preventDefault();
+      c.setPointerCapture(e.pointerId);
+      draft.drawing = true;
+      draft.last = draftPoint(e);
+      draft.ctx.beginPath();
+      draft.ctx.arc(draft.last.x, draft.last.y, 1.2, 0, Math.PI * 2);
+      draft.ctx.fillStyle = '#0f172a';
+      draft.ctx.fill();
+    });
+    c.addEventListener('pointermove', e => {
+      if (!draft.drawing) return;
+      e.preventDefault();
+      const p = draftPoint(e);
+      draft.ctx.beginPath();
+      draft.ctx.moveTo(draft.last.x, draft.last.y);
+      draft.ctx.lineTo(p.x, p.y);
+      draft.ctx.stroke();
+      draft.last = p;
+    });
+    const end = () => { draft.drawing = false; };
+    c.addEventListener('pointerup', end);
+    c.addEventListener('pointercancel', end);
+    $('btn-draft').addEventListener('click', () => ($('draft').hidden ? openDraft() : ($('draft').hidden = true)));
+    $('draft-close').addEventListener('click', () => { $('draft').hidden = true; });
+    $('draft-clear').addEventListener('click', clearDraft);
+  }
+
+  // Qog'ozda ishlashga ruxsat bo'lsa: pastga qarash va qo'l harakati xavf emas,
+  // yuz qisqa vaqt ko'rinmasligi ham (qog'ozga egilganda) kechiriladi
+  function faceRules() {
+    if (!S.settings.allow_paper) return FACE_RULES;
+    return FACE_RULES
+      .filter(([type]) => type !== 'looking_down' && type !== 'motion')
+      .map(r => (r[0] === 'face_missing' ? [r[0], 4000, 12000, r[3]] : r));
+  }
+
   function onFaceSample(s) {
     if (!S.active) return;
     const now = Date.now();
@@ -641,7 +727,7 @@
       motion: s.motion
     };
     let banner = null;
-    for (const [type, showAfter, reportAfter, text] of FACE_RULES) {
+    for (const [type, showAfter, reportAfter, text] of faceRules()) {
       if (!active[type]) {
         delete S.faceSince[type];
         delete S.faceReported[type];
@@ -695,6 +781,7 @@
   // ─── ISHGA TUSHIRISH ───────────────────────────────────────────────────────
   function bindEvents() {
     $('reg-form').addEventListener('submit', onContinue);
+    bindDraft();
     $('btn-back').addEventListener('click', () => show('scr-classes'));
     $('btn-rules-ok').addEventListener('click', onRulesOk);
     $('btn-rules-back').addEventListener('click', () => { $('modal-rules').hidden = true; });

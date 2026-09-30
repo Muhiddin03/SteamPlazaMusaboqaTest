@@ -271,6 +271,21 @@ body.quiz-active .topbar-btn { display: none; }
 .timebar { height: 6px; background: #e2e8f0; border-radius: 999px; overflow: hidden; margin-bottom: 10px; flex-shrink: 0; }
 .timebar > div { height: 100%; width: 100%; background: var(--primary); transition: width .25s linear; }
 .timebar > div.low { background: var(--danger); }
+.draft-btn { border: 1px solid var(--border); cursor: pointer; font: inherit; color: var(--primary-hover); }
+.draft-btn i { color: var(--primary-hover); font-size: 18px; }
+.draft {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 5;
+    height: 58%; display: flex; flex-direction: column;
+    background: #fff; border-top: 3px solid var(--primary); border-radius: 18px 18px 0 0;
+    box-shadow: 0 -8px 24px rgba(15, 23, 42, .18); padding-bottom: var(--safe-b);
+}
+.draft-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.draft-bar b { display: inline-flex; align-items: center; gap: 6px; color: var(--primary-hover); }
+#draft-canvas {
+    flex: 1; width: 100%; min-height: 0; touch-action: none; cursor: crosshair;
+    background-image: linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px);
+    background-size: 22px 22px;
+}
 .face-banner {
     flex-shrink: 0; margin-bottom: 8px; padding: 10px 12px; border-radius: 12px;
     background: var(--danger); color: #fff; font-weight: 800; font-size: 15px; text-align: center;
@@ -472,9 +487,21 @@ body.quiz-active .topbar-btn { display: none; }
 
 .list { display: grid; gap: 10px; }
 .attempt {
-    display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; margin: 0;
+    display: flex; align-items: stretch; gap: 0; padding: 0; margin: 0; overflow: hidden;
     border-left: 5px solid var(--primary);
 }
+.attempt.selected { outline: 2px solid var(--primary); background: #f0fdf4 !important; }
+.attempt-check { display: flex; align-items: flex-start; padding: 16px 4px 16px 12px; cursor: pointer; }
+.attempt-check input { width: 20px; height: 20px; margin: 0; accent-color: var(--primary); }
+.attempt-main {
+    flex: 1; min-width: 0; display: block; padding: 14px 16px 14px 8px; text-align: left;
+    background: none; border: 0; font: inherit; color: var(--text); cursor: pointer;
+}
+.bulkbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 14px; margin-bottom: 12px; }
+.bulk-all { margin: 0; font-weight: 700; font-size: 14px; }
+.bulk-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.bulkbar small { flex-basis: 100%; }
+.btn-danger.btn-sm { width: auto; }
 .attempt.risk-medium, .attempt.risk-high, .attempt.risk-low, .attempt.risk-unknown { background: #fff; }
 .attempt.risk-medium { border-left-color: var(--warn); }
 .attempt.risk-high { border-left-color: var(--danger); }

@@ -46,6 +46,7 @@
                 <div class="quiz-pill"><b id="q-num">1</b>/<span id="q-total">1</span></div>
                 <div class="quiz-pill quiz-timer" id="q-timer"><i class="ri-timer-line"></i> <b id="q-time">0:00</b></div>
                 <div class="quiz-pill quiz-viol" id="q-viol" title="Qoidabuzarliklar"><i class="ri-alarm-warning-line"></i> <b id="q-viol-n">0</b></div>
+                <button class="quiz-pill draft-btn" id="btn-draft" type="button" aria-label="Qoralama" title="Qoralama — misol ishlash uchun"><i class="ri-pencil-line"></i></button>
             </div>
             <div class="timebar"><div id="q-timebar"></div></div>
             <div class="face-banner" id="face-banner" role="alert" hidden></div>
@@ -54,6 +55,17 @@
                 <div class="options" id="q-options" role="radiogroup" aria-labelledby="q-text"></div>
             </div>
             <p class="quiz-note"><i class="ri-eye-line"></i> Javobni bosing — keyingi savol darhol chiqadi</p>
+
+            <div class="draft" id="draft" hidden>
+                <div class="draft-bar">
+                    <b><i class="ri-pencil-line"></i> Qoralama</b>
+                    <span class="row-tight">
+                        <button class="btn btn-ghost btn-sm" id="draft-clear" type="button"><i class="ri-eraser-line"></i> Tozalash</button>
+                        <button class="btn btn-primary btn-sm" id="draft-close" type="button">Yopish</button>
+                    </span>
+                </div>
+                <canvas id="draft-canvas" aria-label="Qoralama: barmoq bilan yozing"></canvas>
+            </div>
         </section>
 
         <section id="scr-result" class="screen" hidden>

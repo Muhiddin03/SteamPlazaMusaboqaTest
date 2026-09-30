@@ -10,6 +10,7 @@
     username: '',
     tab: 'live',
     liveTiles: new Map(),
+    selected: new Set(),
     classes: [],
     attempts: [],
     tests: [],
@@ -259,7 +260,24 @@
     try {
       const s = await aapi('/api/admin/settings');
       $('live-camera').checked = s.camera_mode === 'required';
+      $('live-paper').checked = s.allow_paper;
     } catch { /* ignore */ }
+  }
+
+  async function onPaperSwitch() {
+    const sw = $('live-paper');
+    const on = sw.checked;
+    sw.disabled = true;
+    try {
+      await aapi('/api/admin/settings', { method: 'PUT', body: { allow_paper: on } });
+      toast(on ? 'Qog\'ozda ishlashga ruxsat berildi — pastga qarash xavf hisoblanmaydi (yangi testlarga)'
+        : 'Qog\'ozda ishlash o\'chirildi', 'success', 5000);
+    } catch (err) {
+      sw.checked = !on;
+      toast(err.message, 'error');
+    } finally {
+      sw.disabled = false;
+    }
   }
 
   async function onCameraSwitch() {
@@ -652,7 +670,8 @@
     if (!classId) return toast('Avval sinfni tanlang', 'warn');
     if (!A.tests.length) return toast('Bu sinfda savol yo\'q', 'warn');
     try {
-      await ensurePdfLib();
+      await Report.ensureLib();
+      const pdfText = Report.pdfText;
       const doc = new window.jspdf.jsPDF();
       doc.setFontSize(16);
       doc.text(pdfText(`${classId} - Savollar bazasi`), 14, 15);
@@ -728,6 +747,10 @@
 
     const list = clear($('res-list'));
     const rows = filteredAttempts();
+    // Ro'yxatdan chiqib ketgan (o'chirilgan) natijalar belgidan olinadi
+    const ids = new Set(A.attempts.map(a => a.id));
+    for (const id of A.selected) if (!ids.has(id)) A.selected.delete(id);
+    updateSelection();
     if (!rows.length) {
       list.append(h('p', { class: 'empty', text: 'Natija topilmadi' }));
       return;
@@ -770,18 +793,77 @@
     const progress = a.status === 'active'
       ? h('span', { class: 'muted', text: `${Math.min(a.current_index + 1, a.question_count || 0)}/${a.question_count || 0}-savol` })
       : h('span', { class: 'score', text: `${a.score}/${a.total} (${pct}%)` });
-    return h('button', { class: 'card attempt ' + risk.cls, type: 'button', onclick: () => openAttempt(a.id) },
-      h('div', { class: 'attempt-top' },
-        place ? h('span', { class: 'place' + (place <= 3 ? ' place-' + place : ''), text: place <= 3 ? MEDALS[place - 1] : place }) : null,
-        h('div', { class: 'attempt-name' }, h('b', { text: a.student_name }), h('small', { text: a.team_name })),
-        h('span', { class: 'badge ' + st.cls, text: st.label })),
-      h('div', { class: 'attempt-meta' },
-        h('span', { class: 'chip', text: a.class_id }),
-        progress,
-        h('span', { class: 'badge ' + risk.cls }, icon(risk.icon), ' ', risk.label),
-        a.violations > 0 ? h('span', { class: 'badge risk-high' }, icon('alarm-warning-line'), ` ${a.violations}`) : null,
-        a.snapshots > 0 ? h('span', { class: 'muted' }, icon('camera-line'), ` ${a.snapshots}`) : null),
-      h('div', { class: 'attempt-date muted small', text: fmtDate(a.started_at) }));
+    const warns = Report.warningCount(a);
+    const cb = h('input', { type: 'checkbox', 'aria-label': `${a.student_name} ni belgilash`, checked: A.selected.has(a.id) });
+    cb.addEventListener('change', () => {
+      if (cb.checked) A.selected.add(a.id); else A.selected.delete(a.id);
+      card.classList.toggle('selected', cb.checked);
+      updateSelection();
+    });
+    const card = h('div', { class: 'card attempt ' + risk.cls + (A.selected.has(a.id) ? ' selected' : '') },
+      h('label', { class: 'attempt-check' }, cb),
+      h('button', { class: 'attempt-main', type: 'button', onclick: () => openAttempt(a.id) },
+        h('div', { class: 'attempt-top' },
+          place ? h('span', { class: 'place' + (place <= 3 ? ' place-' + place : ''), text: place <= 3 ? MEDALS[place - 1] : place }) : null,
+          h('div', { class: 'attempt-name' }, h('b', { text: a.student_name }),
+            a.team_name && a.team_name !== '-' ? h('small', { text: a.team_name }) : null),
+          h('span', { class: 'badge ' + st.cls, text: st.label })),
+        h('div', { class: 'attempt-meta' },
+          h('span', { class: 'chip', text: a.class_id }),
+          progress,
+          h('span', { class: 'badge ' + risk.cls }, icon(risk.icon), ' ', risk.label),
+          a.violations > 0 ? h('span', { class: 'badge risk-high', title: 'Qoidabuzarliklar' }, icon('alarm-warning-line'), ` ${a.violations}`) : null,
+          warns > 0 ? h('span', { class: 'badge risk-medium', title: 'Ogohlantirishlar' }, icon('error-warning-line'), ` ${warns} ogohl.`) : null,
+          a.snapshots > 0 ? h('span', { class: 'muted' }, icon('camera-line'), ` ${a.snapshots}`) : null),
+        h('div', { class: 'attempt-date muted small', text: fmtDate(a.started_at) })));
+    return card;
+  }
+
+  // ─── Belgilash va ommaviy amallar ───
+  // Belgilangan bo'lsa — faqat ular, aks holda ro'yxatdagi (filtrdagi) barcha natijalar
+  function targetAttempts() {
+    const rows = filteredAttempts();
+    return A.selected.size ? rows.filter(a => A.selected.has(a.id)) : rows;
+  }
+
+  function updateSelection() {
+    const rows = filteredAttempts();
+    const n = rows.filter(a => A.selected.has(a.id)).length;
+    const all = $('sel-all');
+    all.checked = n > 0 && n === rows.length;
+    all.indeterminate = n > 0 && n < rows.length;
+    $('sel-label').textContent = n ? `${n} ta belgilandi` : 'Hammasini belgilash';
+    $('sel-hint').textContent = n
+      ? 'Amallar faqat belgilangan natijalarga qo\'llanadi.'
+      : `Hech narsa belgilanmasa — ro'yxatdagi barcha ${rows.length} ta natijaga qo'llanadi.`;
+    $('bulkbar').hidden = !rows.length;
+  }
+
+  function onSelectAll() {
+    const rows = filteredAttempts();
+    const on = $('sel-all').checked;
+    for (const a of rows) { if (on) A.selected.add(a.id); else A.selected.delete(a.id); }
+    renderAttempts();
+  }
+
+  async function onBulkDelete() {
+    const rows = targetAttempts();
+    if (!rows.length) return toast('O\'chirish uchun natija yo\'q', 'warn');
+    const active = rows.filter(a => a.status === 'active').length;
+    const password = await promptPassword(
+      `${rows.length} ta natija butunlay o'chiriladi (javoblar, nazorat jurnali, kamera suratlari bilan)` +
+      (active ? `, shundan ${active} tasi hozir test yechmoqda` : '') +
+      '. O\'quvchilar testni qayta topshira oladi. Tasdiqlash uchun admin parolini kiriting.',
+      { title: 'Natijalarni o\'chirish', okText: `${rows.length} tasini o'chirish`, danger: true });
+    if (!password) return;
+    try {
+      const r = await aapi('/api/admin/attempts/bulk-delete', { method: 'POST', body: { ids: rows.map(a => a.id), password } });
+      A.selected.clear();
+      toast(`${r.deleted} ta natija o'chirildi`, 'success');
+      loadAttempts();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
   }
 
   async function openAttempt(id) {
@@ -844,6 +926,13 @@
     }
 
     const actions = [];
+    if (d.status !== 'active') {
+      const sheetBtn = h('button', { class: 'btn btn-primary', type: 'button',
+        onclick: () => downloadStudentPdf([d.id], false, sheetBtn) }, icon('user-shared-line'), ' O\'quvchiga PDF');
+      const fullBtn = h('button', { class: 'btn btn-ghost', type: 'button',
+        onclick: () => downloadStudentPdf([d.id], true, fullBtn) }, icon('file-shield-2-line'), ' To\'liq hisobot PDF');
+      actions.push(sheetBtn, fullBtn);
+    }
     if (d.status === 'active') {
       actions.push(h('button', { class: 'btn btn-danger', type: 'button', onclick: async () => {
         if (!await confirmDialog('Test hozir to\'xtatilsinmi?', { okText: 'To\'xtatish', danger: true })) return;
@@ -895,81 +984,70 @@
     return [os, br].filter(Boolean).join(' · ') || ua.slice(0, 40);
   }
 
-  // ─── PDF ───────────────────────────────────────────────────────────────────
-  function loadScript(src) {
+  // ─── PDF (report-pdf.js orqali) ────────────────────────────────────────────
+  const REPORT_UI = { STATUS, RISK, EVENTS, shortUA, snapReason };
+
+  function blobToDataUrl(blob) {
     return new Promise((resolve, reject) => {
-      const s = h('script', { src, crossorigin: 'anonymous', referrerpolicy: 'no-referrer' });
-      s.onload = resolve;
-      s.onerror = () => reject(new Error('PDF kutubxonasi yuklanmadi'));
-      document.head.append(s);
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
     });
   }
 
-  async function ensurePdfLib() {
-    if (!window.jspdf) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
-    if (!window.jspdf.jsPDF.API.autoTable) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js');
+  async function fetchSnapshot(id) {
+    const res = await aapi('/api/admin/snapshots/' + id, { raw: true });
+    return blobToDataUrl(await res.blob());
   }
 
-  const CYR = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'yo', ж: 'j', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'x', ц: 's', ч: 'ch', ш: 'sh', щ: 'sh', ъ: "'", ы: 'i', ь: '', э: 'e', ю: 'yu', я: 'ya', ў: "o'", қ: 'q', ғ: "g'", ҳ: 'h' };
-
-  // Standart PDF shrifti faqat lotin harflarini qo'llaydi
-  function pdfText(s) {
-    return String(s ?? '')
-      .replace(/[ʻʼ’‘`]/g, "'")
-      .replace(/[Ѐ-ӿ]/g, ch => {
-        const low = ch.toLowerCase();
-        const t = CYR[low] ?? '';
-        return ch === low ? t : t.charAt(0).toUpperCase() + t.slice(1);
-      })
-      .replace(/[^\x20-\x7E -ÿ]/g, '?');
-  }
-
+  // Natijalar jadvali (reyting) yoki TOP-3
   async function downloadPdf(top3) {
     const btn = $(top3 ? 'btn-top3' : 'btn-pdf');
     btn.disabled = true;
     try {
-      await ensurePdfLib();
       const rows = (top3 ? A.attempts : filteredAttempts()).filter(a => a.status !== 'active');
       if (!rows.length) return toast('PDF uchun natija yo\'q', 'warn');
-      const doc = new window.jspdf.jsPDF();
       const classId = $('res-class').value;
       const title = top3 ? 'TOP-3 g\'oliblar' : (classId ? classId + ' natijalari' : 'Umumiy natijalar');
-      doc.setFontSize(16);
-      doc.text(pdfText(`STEAM PLAZA — ${title}`), 14, 16);
-      doc.setFontSize(9);
-      doc.text(pdfText(`Sana: ${fmtDate(new Date())}`), 14, 22);
-
-      const groups = new Map();
-      for (const a of rows) {
-        if (!groups.has(a.class_id)) groups.set(a.class_id, []);
-        groups.get(a.class_id).push(a);
-      }
-      let y = 28;
-      const PLACE = ['1 (Oltin)', '2 (Kumush)', '3 (Bronza)'];
-      for (const [cls, group] of [...groups.entries()].sort()) {
-        let list = ranked(group);
-        if (top3) list = list.slice(0, 3);
-        if (!list.length) continue;
-        if (y > 260) { doc.addPage(); y = 16; }
-        doc.setFontSize(12);
-        doc.text(pdfText(cls), 14, y);
-        doc.autoTable({
-          head: [["O'rin", 'Jamoa', 'Ism', 'Ball', 'Holat', 'Qoidabuzarlik', 'Nazorat', 'Sana']],
-          body: list.map((a, i) => [top3 ? PLACE[i] : i + 1, a.team_name, a.student_name, `${a.score}/${a.total}`,
-            (STATUS[a.status] || {}).label || a.status, a.violations, (RISK[a.risk] || RISK.unknown).label, fmtDate(a.started_at)]
-            .map(pdfText)),
-          startY: y + 2,
-          theme: 'grid',
-          styles: { fontSize: 8 },
-          headStyles: { fillColor: [16, 185, 129] }
-        });
-        y = doc.lastAutoTable.finalY + 12;
-      }
-      doc.save(`${(classId || 'barcha').replace(/[^\w-]+/g, '_')}_${top3 ? 'top3' : 'natijalar'}.pdf`);
+      await Report.table(rows, { ui: REPORT_UI, top3, title, name: `${classId || 'barcha'}_${top3 ? 'top3' : 'natijalar'}` });
     } catch (err) {
       toast(err.message, 'error');
     } finally {
       btn.disabled = false;
+    }
+  }
+
+  /**
+   * O'quvchi varaqalari (full=false) yoki to'liq hisobot (full=true).
+   * ids — bitta yoki bir nechta natija; bir nechta bo'lsa hammasi bitta PDF'da, boshida reyting.
+   */
+  async function downloadStudentPdf(ids, full, btn) {
+    if (!ids.length) return toast('PDF uchun natija tanlanmagan', 'warn');
+    const label = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Tayyorlanmoqda...'; }
+    try {
+      const list = await aapi('/api/admin/attempts/report', { method: 'POST', body: { ids } });
+      const done = list.filter(a => a.status !== 'active');
+      if (!done.length) return toast('Hali yakunlanmagan testlar uchun PDF tayyorlanmaydi', 'warn');
+      const classId = $('res-class').value;
+      const one = done.length === 1 ? done[0] : null;
+      const name = one
+        ? `${one.student_name}_${one.class_id}_${full ? 'hisobot' : 'natija'}`
+        : `${classId || 'barcha'}_${full ? 'toliq_hisobot' : 'oquvchi_varaqalari'}`;
+      await Report.students(done, {
+        full,
+        ui: REPORT_UI,
+        fetchImage: fetchSnapshot,
+        title: full ? 'To\'liq nazorat hisoboti' : 'Test natijalari',
+        name,
+        onProgress: (i, n) => { if (btn && n > 1) btn.textContent = `${i}/${n}...`; }
+      });
+      toast('PDF tayyor', 'success');
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = label; }
     }
   }
 
@@ -983,6 +1061,7 @@
       $('s-camera').value = s.camera_mode;
       $('s-share').checked = s.share_grade_tests;
       $('s-score').checked = s.show_score_to_student;
+      $('s-paper').checked = s.allow_paper;
     } catch (err) {
       toast(err.message, 'error');
     }
@@ -996,7 +1075,8 @@
       questions_per_attempt: Number($('s-count').value),
       camera_mode: $('s-camera').value,
       share_grade_tests: $('s-share').checked,
-      show_score_to_student: $('s-score').checked
+      show_score_to_student: $('s-score').checked,
+      allow_paper: $('s-paper').checked
     };
     try {
       await aapi('/api/admin/settings', { method: 'PUT', body });
@@ -1079,6 +1159,11 @@
       store.set('sp_sound', $('live-sound').checked ? 'on' : 'off');
       if ($('live-sound').checked) beep();
     });
+    $('sel-all').addEventListener('change', onSelectAll);
+    $('btn-bulk-del').addEventListener('click', onBulkDelete);
+    $('btn-sheets').addEventListener('click', () => downloadStudentPdf(targetAttempts().map(a => a.id), false, $('btn-sheets')));
+    $('btn-report').addEventListener('click', () => downloadStudentPdf(targetAttempts().map(a => a.id), true, $('btn-report')));
+    $('live-paper').addEventListener('change', onPaperSwitch);
     $('btn-pdf').addEventListener('click', () => downloadPdf(false));
     $('btn-top3').addEventListener('click', () => downloadPdf(true));
     $('t-pdf').addEventListener('click', downloadTestsPdf);

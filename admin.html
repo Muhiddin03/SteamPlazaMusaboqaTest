@@ -67,6 +67,11 @@
                         <span><b>Kamera nazorati</b><small id="live-camera-note">Yangi boshlanadigan testlarga qo'llanadi</small></span>
                     </label>
                     <label class="switch">
+                        <input type="checkbox" id="live-paper">
+                        <span class="switch-ui"></span>
+                        <span><b>Qog'ozda ishlash (matematika)</b><small>Pastga qarash va yozish harakati xavf hisoblanmaydi</small></span>
+                    </label>
+                    <label class="switch">
                         <input type="checkbox" id="live-sound" checked>
                         <span class="switch-ui"></span>
                         <span><b>Ovozli signal</b><small>Xavf aniqlanganda ovoz chiqadi</small></span>
@@ -95,6 +100,15 @@
                     <button class="btn btn-ghost" id="btn-top3" type="button"><i class="ri-trophy-line"></i> TOP-3</button>
                 </div>
                 <div class="stats" id="res-stats"></div>
+                <div class="bulkbar card" id="bulkbar">
+                    <label class="check bulk-all"><input type="checkbox" id="sel-all"> <span id="sel-label">Hammasini belgilash</span></label>
+                    <div class="bulk-actions">
+                        <button class="btn btn-ghost btn-sm" id="btn-sheets" type="button"><i class="ri-user-shared-line"></i> O'quvchiga PDF</button>
+                        <button class="btn btn-ghost btn-sm" id="btn-report" type="button"><i class="ri-file-shield-2-line"></i> To'liq hisobot PDF</button>
+                        <button class="btn btn-danger btn-sm" id="btn-bulk-del" type="button"><i class="ri-delete-bin-line"></i> O'chirish</button>
+                    </div>
+                    <small class="muted" id="sel-hint">Hech narsa belgilanmasa — ro'yxatdagi barcha natijalarga qo'llanadi.</small>
+                </div>
                 <div class="list" id="res-list"></div>
             </section>
 
@@ -199,6 +213,7 @@
                         </label>
                     </div>
                     <label class="check"><input type="checkbox" id="s-share"> <span>Parallel sinflar savollari aralash berilsin (7-A o'quvchisiga 7-A, 7-B... dagi barcha savollar). O'chiq bo'lsa — har sinf faqat o'z savollarini oladi</span></label>
+                    <label class="check"><input type="checkbox" id="s-paper"> <span><b>Qog'ozda ishlashga ruxsat</b> (matematika) — pastga qarash va qo'l harakati xavf hisoblanmaydi</span></label>
                     <label class="check"><input type="checkbox" id="s-score"> <span>Test oxirida o'quvchiga natijasi ko'rsatilsin</span></label>
                     <button class="btn btn-primary" type="submit"><i class="ri-save-line"></i> Saqlash</button>
                 </form>
@@ -227,6 +242,7 @@
 
     <script src="config.js"></script>
     <script src="common.js"></script>
+    <script src="report-pdf.js"></script>
     <script src="admin.js"></script>
 </body>
 </html>

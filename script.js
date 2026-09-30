@@ -1,901 +1,648 @@
-// ─── API URL ───────────────────────────────────────────────────────────────────
-const API = "https://steamplazamusaboqatestbackend-production.up.railway.app";
+'use strict';
+// ─── O'QUVCHI SAHIFASI: test topshirish va nazorat ───────────────────────────
+(() => {
+  const TOKEN_KEY = 'sp_attempt';
+  const INFO_KEY = 'sp_attempt_info';
+  const HEARTBEAT_MS = 10000;
+  const SNAPSHOT_MS = 20000;
+  const FOCUS_LOST_MS = 3000;
 
-// ─── STATE ─────────────────────────────────────────────────────────────────────
-let curClass = "";
-let tList = [];
-let qIdx = 0;
-let score = 0;
-let allGlobalClasses = [];
-
-// ─── HELPER: API CALL ──────────────────────────────────────────────────────────
-async function api(path, method = 'GET', body = null) {
-  const opts = {
-    method,
-    headers: { 'Content-Type': 'application/json' }
+  const S = {
+    settings: { question_time_sec: 45, max_violations: 3, camera_mode: 'off' },
+    classId: null,
+    token: null,
+    info: null,
+    state: null,
+    questionId: null,
+    selected: null,
+    deadline: 0,
+    limitMs: 1,
+    submitting: false,
+    active: false,
+    fullscreen: false,
+    stream: null,
+    baseArea: 0,
+    hiddenAt: 0,
+    hiddenReported: false,
+    blurAt: 0,
+    blurTimer: null,
+    focusLostReported: false,
+    offlineAt: 0,
+    timers: {}
   };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(API + path, opts);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Server xatosi' }));
-    throw new Error(err.error || 'Server xatosi');
-  }
-  return res.json();
-}
 
-// ─── GRADE HELPER ──────────────────────────────────────────────────────────────
-function getGrade(name) {
-  return name.split('-')[0];
-}
-
-// ─── UI HELPERS ────────────────────────────────────────────────────────────────
-window.toggleSidebar = () => document.getElementById('admin-sidebar').classList.toggle('collapsed');
-window.openLogin = () => document.getElementById('m-login').classList.add('active');
-window.closeM = (id) => document.getElementById(id).classList.remove('active');
-window.goHome = () => {
-  document.getElementById('v-home').classList.remove('hidden');
-  document.getElementById('v-auth').classList.add('hidden');
-};
-window.closeRes = () => {
-  document.getElementById('res-grid').classList.remove('hidden');
-  document.getElementById('res-detail').classList.add('hidden');
-};
-
-// ─── ADMIN LOGIN ───────────────────────────────────────────────────────────────
-window.verifyAdmin = () => {
-  if (document.getElementById('adm-pass').value === "1234") {
-    document.getElementById('v-home').classList.add('hidden');
-    document.getElementById('m-login').classList.remove('active');
-    document.getElementById('admin-sidebar').classList.add('active');
-    document.getElementById('t-classes').classList.add('active');
-    document.getElementById('admin-login-btn').classList.add('hidden');
-    loadData();
-  } else {
-    alert("Parol noto'g'ri!");
-  }
-};
-
-// ─── TAB SWITCH ────────────────────────────────────────────────────────────────
-window.switchTab = (id, el) => {
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.side-item').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  el.classList.add('active');
-  if (id === 't-results') loadResGrid();
-};
-
-// ─── BULK TEST YUKLASH ─────────────────────────────────────────────────────────
-window.uploadBulkTests = async () => {
-  const input = document.getElementById('bulk-file-input');
-  const statusEl = document.getElementById('bulk-status');
-  const file = input.files[0];
-  if (!file) return alert("Fayl tanlang!");
-
-  statusEl.innerHTML = "<span style='color:#64748b'>O'qilmoqda...</span>";
-
-  const text = await file.text();
-  let tests = [];
-
-  try {
-    if (file.name.endsWith('.json')) {
-      tests = JSON.parse(text);
-    } else if (file.name.endsWith('.csv')) {
-      const lines = text.trim().split('\n').filter(l => l.trim());
-      const headers = lines[0].split(',').map(h => h.trim());
-      tests = lines.slice(1).map(line => {
-        const vals = line.split(',').map(v => v.trim());
-        const obj = {};
-        headers.forEach((h, i) => obj[h] = vals[i] || '');
-        return obj;
-      });
-    } else {
-      return alert("Faqat .json yoki .csv fayl!");
-    }
-  } catch (e) {
-    statusEl.innerHTML = "<span style='color:red'>Format xatosi: " + e.message + "</span>";
-    return;
+  // ─── EKRANLAR ──────────────────────────────────────────────────────────────
+  function show(id) {
+    for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
+    window.scrollTo(0, 0);
   }
 
-  // Validatsiya
-  const invalid = tests.filter(t => !t.class_id || !t.question || !t.correct_answer);
-  if (invalid.length > 0) {
-    statusEl.innerHTML = `<span style='color:red'>${invalid.length} ta satrda class_id/question/correct_answer yo'q!</span>`;
-    return;
-  }
-
-  let added = 0, skipped = 0, errors = 0;
-  statusEl.innerHTML = `<span style='color:#64748b'>0/${tests.length} yuborilmoqda...</span>`;
-
-  for (let i = 0; i < tests.length; i++) {
-    const t = tests[i];
+  // ─── SINFLAR ───────────────────────────────────────────────────────────────
+  async function loadClasses() {
+    show('scr-classes');
+    const grid = clear($('class-grid'));
+    grid.append(h('div', { class: 'skeleton' }), h('div', { class: 'skeleton' }), h('div', { class: 'skeleton' }));
     try {
-      const res = await api('/api/classes/' + encodeURIComponent(t.class_id) + '/tests', 'POST', {
-        question: t.question,
-        correct_answer: t.correct_answer,
-        wrong1: t.wrong1 || '',
-        wrong2: t.wrong2 || '',
-        targetClasses: [t.class_id]
-      });
-      if (res.skipped) skipped++; else added++;
-    } catch (e) {
-      errors++;
+      const classes = await api('/api/classes');
+      clear(grid);
+      if (!classes.length) {
+        grid.append(h('p', { class: 'empty', text: 'Hozircha sinflar qo\'shilmagan.' }));
+        return;
+      }
+      for (const c of classes) {
+        grid.append(h('button', { class: 'class-btn', type: 'button', onclick: () => openRegister(c.id) },
+          icon('team-line'), h('span', { text: c.id })));
+      }
+    } catch (err) {
+      clear(grid).append(h('div', { class: 'empty error' },
+        h('p', { text: err.message }),
+        h('button', { class: 'btn btn-primary', type: 'button', onclick: loadClasses }, icon('refresh-line'), ' Qayta urinish')));
     }
-    statusEl.innerHTML = `<span style='color:#64748b'>${i+1}/${tests.length} yuborilmoqda...</span>`;
   }
 
-  statusEl.innerHTML = `<span style='color:#059669'>✓ Tayyor! +${added} qo'shildi, ${skipped} takror o'tkazildi${errors ? ', ' + errors + ' xato' : ''}</span>`;
-  input.value = "";
-  loadData();
-};
+  async function loadSettings() {
+    try { S.settings = await api('/api/settings'); } catch { /* standart qiymatlar qoladi */ }
+  }
 
-// ─── LOAD DATA (Sinflar ro'yxati) ─────────────────────────────────────────────
-async function loadData() {
-  const sg = document.getElementById('st-grid');
-  const ag = document.getElementById('adm-grid');
-  const sel = document.getElementById('adm-sel-c');
-  const chkBoxList = document.getElementById('classes-checkbox-list');
+  // ─── RO'YXATDAN O'TISH ─────────────────────────────────────────────────────
+  function openRegister(classId) {
+    S.classId = classId;
+    $('reg-class').textContent = classId;
+    $('reg-error').textContent = '';
+    const s = S.settings;
+    const rules = [
+      `Har bir savolga ${s.question_time_sec} soniya beriladi. Vaqt tugasa, savol javobsiz qoladi.`,
+      'Test boshlangach ilovadan, brauzerdan yoki boshqa oynaga chiqish taqiqlanadi.',
+      'Nusxalash, skrinshot, boshqa varaq ochish va ekranni bo\'lish taqiqlanadi.',
+      'Kitob, daftar, boshqa telefon va sun\'iy intellekt (ChatGPT va h.k.) dan foydalanish taqiqlanadi.',
+      s.max_violations > 0 ? `${s.max_violations} marta qoidabuzarlik qilinsa, test avtomatik to'xtatiladi.` : null,
+      s.camera_mode === 'required' ? 'Old kamera yoqiladi va test davomida surat olib turiladi.' : null,
+      'Testni faqat bir marta topshirish mumkin. Barcha harakatlaringiz o\'qituvchiga ko\'rinadi.'
+    ].filter(Boolean);
+    clear($('rules-list')).append(...rules.map(r => h('li', { text: r })));
+    $('cam-consent-row').hidden = s.camera_mode !== 'required';
+    show('scr-register');
+    $('reg-name').focus();
+  }
 
-  sg.innerHTML = "<p>Yuklanmoqda...</p>";
+  async function onStart(e) {
+    e.preventDefault();
+    const name = $('reg-name').value.trim().replace(/\s+/g, ' ');
+    const team = $('reg-team').value.trim().replace(/\s+/g, ' ');
+    const err = $('reg-error');
+    const needCamera = S.settings.camera_mode === 'required';
+    if (name.length < 3) return (err.textContent = 'Ism familiyangizni to\'liq kiriting');
+    if (!$('reg-agree').checked) return (err.textContent = 'Qoidalarga rozilik bildiring');
+    if (needCamera && !$('reg-camera').checked) return (err.textContent = 'Kamera uchun rozilik bildiring');
+    err.textContent = '';
 
-  try {
-    const classes = await api('/api/classes');
-    allGlobalClasses = classes;
+    const btn = $('btn-start');
+    btn.disabled = true;
+    btn.textContent = 'Tayyorlanmoqda...';
+    enterFullscreen(); // foydalanuvchi bosishi ichida chaqirilishi shart
 
-    sg.innerHTML = "";
-    ag.innerHTML = "";
-    sel.innerHTML = "<option value=''>Sinf tanlang</option>";
-    if (chkBoxList) chkBoxList.innerHTML = "";
-
-    if (classes.length === 0) {
-      sg.innerHTML = "<p style='color:#64748b'>Hech qanday sinf yo'q</p>";
+    try {
+      if (needCamera) await startCamera();
+      const res = await api('/api/attempt/start', {
+        method: 'POST',
+        body: { class_id: S.classId, student_name: name, team_name: team, camera: !!S.stream }
+      });
+      S.token = res.token;
+      S.info = { name, team, classId: S.classId };
+      store.set(TOKEN_KEY, res.token);
+      store.set(INFO_KEY, JSON.stringify(S.info));
+      beginQuiz(res);
+    } catch (e2) {
+      err.textContent = e2.message || 'Xatolik yuz berdi';
+      stopCamera();
+      exitFullscreen();
+    } finally {
+      btn.disabled = false;
+      clear(btn).append(icon('play-fill'), ' Testni boshlash');
     }
+  }
 
-    classes.forEach(c => {
-      // FIX: data-id ishlatildi, onclick ichida apostrof muammosi hal qilindi
-      const card = document.createElement('div');
-      card.className = 'card';
-      card.innerHTML = `<h3>${c.id}</h3>`;
-      card.addEventListener('click', () => openAuth(c.id));
-      sg.appendChild(card);
+  // ─── TEST ──────────────────────────────────────────────────────────────────
+  function beginQuiz(state) {
+    S.active = true;
+    S.baseArea = innerWidth * innerHeight;
+    buildWatermark();
+    show('scr-quiz');
+    document.body.classList.add('quiz-active');
+    clearInterval(S.timers.hb);
+    clearInterval(S.timers.snap);
+    S.timers.hb = setInterval(heartbeat, HEARTBEAT_MS);
+    if (S.stream) {
+      S.timers.snap = setInterval(() => snapshot('interval'), SNAPSHOT_MS);
+      setTimeout(() => snapshot('start'), 1500);
+    }
+    render(state);
+  }
 
-      const admCard = document.createElement('div');
-      admCard.className = 'card';
-      admCard.dataset.classId = c.id;
-      admCard.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:16px 20px;';
-      admCard.innerHTML = `
-        <div style="display:flex;align-items:center;gap:12px;">
-          <b style="font-size:16px;">${c.id}</b>
-          <span class="test-count-badge" style="background:#f0fdf4;color:#059669;font-size:12px;font-weight:800;padding:3px 10px;border-radius:20px;border:1.5px solid #bbf7d0;">...</span>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <i class="ri-delete-bin-line icon-btn" style="cursor:pointer;color:red;" title="Sinfni o'chirish"></i>
-        </div>`;
-      admCard.querySelector('i').addEventListener('click', (e) => { e.stopPropagation(); delClass(c.id); });
-      ag.appendChild(admCard);
+  function render(state) {
+    S.state = state;
+    updateViolations(state);
+    if (state.status !== 'active') return endQuiz(state);
 
-      // Har sinf uchun test sonini async yukla
-      api('/api/classes/' + encodeURIComponent(c.id) + '/tests').then(tests => {
-        const badge = admCard.querySelector('.test-count-badge');
-        if (badge) badge.textContent = tests.length + ' ta test';
-        if (tests.length === 0) {
-          badge.style.background = '#fef2f2';
-          badge.style.color = '#dc2626';
-          badge.style.borderColor = '#fecaca';
+    const q = state.question;
+    $('q-num').textContent = q.number;
+    $('q-total').textContent = state.total;
+    S.limitMs = q.limit_ms;
+    S.deadline = performance.now() + q.remaining_ms;
+
+    if (q.id !== S.questionId) {
+      S.questionId = q.id;
+      S.selected = null;
+      $('q-text').textContent = q.text;
+      const box = clear($('q-options'));
+      q.options.forEach((opt, i) => {
+        const b = h('button', { class: 'option', type: 'button', role: 'radio', 'aria-checked': 'false',
+          'aria-label': `${String.fromCharCode(65 + i)}) ${opt}`, onclick: () => select(b, opt) },
+        h('span', { class: 'option-letter', text: String.fromCharCode(65 + i) }),
+        h('span', { class: 'option-text', text: opt }));
+        box.append(b);
+      });
+      $('btn-answer').disabled = true;
+    }
+    setBusy(false);
+    clearInterval(S.timers.tick);
+    S.timers.tick = setInterval(tick, 250);
+    tick();
+  }
+
+  function select(btn, opt) {
+    if (S.submitting) return;
+    for (const b of $('q-options').children) {
+      b.classList.toggle('selected', b === btn);
+      b.setAttribute('aria-checked', String(b === btn));
+    }
+    S.selected = opt;
+    $('btn-answer').disabled = false;
+  }
+
+  function tick() {
+    const left = Math.max(0, S.deadline - performance.now());
+    const sec = Math.ceil(left / 1000);
+    $('q-time').textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+    $('q-timebar').style.width = `${Math.min(100, (left / S.limitMs) * 100)}%`;
+    $('q-timer').classList.toggle('low', sec <= 10);
+    $('q-timebar').classList.toggle('low', sec <= 10);
+    if (left <= 0 && !S.submitting) submit(S.selected);
+  }
+
+  function setBusy(busy) {
+    S.submitting = busy;
+    $('btn-answer').disabled = busy || S.selected === null;
+    for (const b of $('q-options').children) b.disabled = busy;
+  }
+
+  async function submit(answer) {
+    if (S.submitting || !S.active) return;
+    setBusy(true);
+    clearInterval(S.timers.tick);
+    const body = { question_id: S.questionId, answer };
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const state = await api('/api/attempt/answer', { method: 'POST', attempt: S.token, body });
+        render(state);
+        return;
+      } catch (err) {
+        if (err.status === 0) {
+          toast('Aloqa yo\'q. Qayta yuborilmoqda...', 'warn', 1500);
+          await new Promise(r => setTimeout(r, 1500));
+          continue;
         }
-      }).catch(() => {});
-
-      sel.innerHTML += `<option value="${c.id}">${c.id}</option>`;
-
-      if (chkBoxList) {
-        const label = document.createElement('label');
-        label.style.cssText = 'display:flex; align-items:center; gap:5px; font-weight:normal; margin:0; width:calc(25% - 15px); min-width:80px; cursor:pointer;';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.name = 'target_classes';
-        cb.value = c.id;
-        cb.style.cssText = 'width:auto; margin:0;';
-        label.appendChild(cb);
-        label.appendChild(document.createTextNode(' ' + c.id));
-        chkBoxList.appendChild(label);
+        if (err.status === 404 || err.status === 401) return sessionLost();
+        toast(err.message, 'error');
+        break;
       }
-    });
-  } catch (err) {
-    sg.innerHTML = `<p style="color:red">Xatolik: ${err.message}. API URL to'g'riligini tekshiring.</p>`;
+    }
+    await resync();
   }
-}
 
-// ─── PARALLEL SINF TANLASH ─────────────────────────────────────────────────────
-window.selectAllParallelClasses = () => {
-  const currentSelectedClass = document.getElementById('adm-sel-c').value;
-  if (!currentSelectedClass) return alert("Avval yuqoridan asosiy sinfni tanlang!");
-  const grade = getGrade(currentSelectedClass);
-  const checkboxes = document.querySelectorAll('input[name="target_classes"]');
-  checkboxes.forEach(cb => {
-    cb.checked = getGrade(cb.value) === grade;
-  });
-};
-
-window.clearSelectionClasses = () => {
-  document.querySelectorAll('input[name="target_classes"]').forEach(cb => cb.checked = false);
-};
-
-// ─── SINF QO'SHISH ─────────────────────────────────────────────────────────────
-window.addClass = async () => {
-  const val = document.getElementById('new-c-input').value.trim();
-  if (!val) return;
-  try {
-    await api('/api/classes', 'POST', { id: val });
-    document.getElementById('new-c-input').value = "";
-    loadData();
-  } catch (err) {
-    alert("Xatolik: " + err.message);
-  }
-};
-
-// ─── TAKRORIY SAVOLLARNI TOZALASH ─────────────────────────────────────────────
-window.dedupClass = async (id) => {
-  if (!confirm(id + " sinfidagi TAKRORIY savollar o'chirilsinmi?\nHar savoldan faqat bittasi qoladi.")) return;
-  try {
-    const res = await api('/api/classes/' + encodeURIComponent(id) + '/dedup', 'DELETE');
-    alert(id + ": " + res.deleted + " ta takroriy savol o'chirildi!");
-    loadTTable();
-  } catch (err) {
-    alert("Xatolik: " + err.message);
-  }
-};
-
-// ─── SINF O'CHIRISH ────────────────────────────────────────────────────────────
-window.delClass = async (id) => {
-  if (confirm(id + " sinfi o'chirilsinmi?")) {
+  async function resync() {
     try {
-      await api('/api/classes/' + encodeURIComponent(id), 'DELETE');
-      loadData();
+      render(await api('/api/attempt/state', { attempt: S.token }));
     } catch (err) {
-      alert("Xatolik: " + err.message);
+      if (err.status === 404 || err.status === 401) return sessionLost();
+      setBusy(false);
+      S.timers.tick = setInterval(tick, 250);
     }
   }
-};
 
-// ─── SAVOL SAQLASH ─────────────────────────────────────────────────────────────
-window.saveTest = async () => {
-  const classId = document.getElementById('adm-sel-c').value;
-  const question = document.getElementById('adm-q').value.trim();
-  const correct_answer = document.getElementById('adm-a').value.trim();
-  const wrong1 = document.getElementById('adm-w1').value.trim();
-  const wrong2 = document.getElementById('adm-w2').value.trim();
-
-  if (!classId || !question || !correct_answer) return alert("To'ldiring!");
-
-  const checkboxes = document.querySelectorAll('input[name="target_classes"]:checked');
-  const targetClasses = [classId];
-  checkboxes.forEach(cb => {
-    if (cb.value !== classId) targetClasses.push(cb.value);
-  });
-
-  try {
-    await api('/api/classes/' + encodeURIComponent(classId) + '/tests', 'POST', {
-      question, correct_answer, wrong1, wrong2, targetClasses
-    });
-    document.getElementById('adm-q').value = "";
-    document.getElementById('adm-a').value = "";
-    document.getElementById('adm-w1').value = "";
-    document.getElementById('adm-w2').value = "";
-    loadTTable();
-  } catch (err) {
-    alert("Xatolik: " + err.message);
+  async function heartbeat() {
+    if (!S.active) return;
+    try {
+      const r = await api('/api/attempt/heartbeat', { method: 'POST', attempt: S.token });
+      applyEventResult(r);
+    } catch (err) {
+      if (err.status === 404 || err.status === 401) sessionLost();
+    }
   }
-};
 
-// ─── SAVOLLAR JADVALINI YUKLASH ───────────────────────────────────────────────
-window.loadTTable = async () => {
-  const classId = document.getElementById('adm-sel-c').value;
-  const box = document.getElementById('adm-t-list');
-  if (!classId) return box.innerHTML = "";
+  function updateViolations(r) {
+    if (typeof r.violations !== 'number') return;
+    $('q-viol-n').textContent = r.max_violations > 0 ? `${r.violations}/${r.max_violations}` : r.violations;
+    $('q-viol').classList.toggle('bad', r.violations > 0);
+  }
 
-  box.innerHTML = "<p style='color:#64748b; padding:10px;'>Yuklanmoqda...</p>";
-  try {
-    const tests = await api('/api/classes/' + encodeURIComponent(classId) + '/tests');
-    box.innerHTML = "";
+  function applyEventResult(r) {
+    if (!r) return;
+    updateViolations(r);
+    if (r.status && r.status !== 'active' && S.active) resync();
+  }
 
-    if (tests.length === 0) {
-      box.innerHTML = "<p style='color:#64748b; padding:10px;'>Savollar yo'q</p>";
+  function endQuiz(state) {
+    S.active = false;
+    for (const t of Object.values(S.timers)) { clearInterval(t); clearTimeout(t); }
+    document.body.classList.remove('quiz-active');
+    $('watermark').hidden = true;
+    $('overlay-warning').hidden = true;
+    stopCamera();
+    exitFullscreen();
+    store.del(TOKEN_KEY);
+    store.del(INFO_KEY);
+    showResult(state);
+  }
+
+  function sessionLost() {
+    S.active = false;
+    store.del(TOKEN_KEY);
+    store.del(INFO_KEY);
+    toast('Test sessiyasi topilmadi', 'error');
+    endQuiz({ status: 'lost' });
+  }
+
+  function showResult(st) {
+    const card = clear($('result-card'));
+    const total = st.total || 0;
+    if (st.status === 'finished') {
+      card.append(h('div', { class: 'result-icon ok' }, icon('checkbox-circle-fill')), h('h2', { text: 'Test yakunlandi!' }));
+      if (typeof st.score === 'number') {
+        const pct = total ? Math.round((st.score / total) * 100) : 0;
+        card.append(
+          h('div', { class: 'score-big' }, h('b', { text: st.score }), h('span', { text: ` / ${total}` })),
+          h('div', { class: 'progress' }, h('div', { style: `width:${pct}%` })),
+          h('div', { class: 'result-stats' },
+            h('div', {}, h('span', { text: 'To\'g\'ri' }), h('b', { class: 'good', text: st.score })),
+            h('div', {}, h('span', { text: 'Xato' }), h('b', { class: 'bad', text: total - st.score })),
+            h('div', {}, h('span', { text: 'Foiz' }), h('b', { text: pct + '%' }))));
+      } else {
+        card.append(h('p', { text: 'Natijangiz o\'qituvchiga yuborildi.' }));
+      }
+    } else if (st.status === 'terminated') {
+      card.append(h('div', { class: 'result-icon bad' }, icon('close-circle-fill')),
+        h('h2', { text: 'Test to\'xtatildi' }),
+        h('p', { text: 'Qoidabuzarliklar soni limitdan oshdi yoki o\'qituvchi testni to\'xtatdi. Natijangiz o\'qituvchiga yuborildi.' }));
+      if (typeof st.score === 'number') card.append(h('p', { class: 'muted', text: `To'g'ri javoblar: ${st.score} / ${total}` }));
+    } else if (st.status === 'abandoned') {
+      card.append(h('div', { class: 'result-icon warn' }, icon('time-line')),
+        h('h2', { text: 'Test yakunlangan' }),
+        h('p', { text: 'Uzoq vaqt aloqa bo\'lmagani uchun test yopildi. O\'qituvchingizga murojaat qiling.' }));
+    } else {
+      card.append(h('div', { class: 'result-icon warn' }, icon('question-line')),
+        h('h2', { text: 'Test sessiyasi topilmadi' }),
+        h('p', { text: 'O\'qituvchingizga murojaat qiling.' }));
+    }
+    if (st.violations > 0) {
+      card.append(h('p', { class: 'chip chip-warn', text: `Qoidabuzarliklar: ${st.violations}` }));
+    }
+    card.append(h('button', { class: 'btn btn-primary btn-block btn-lg', type: 'button',
+      onclick: () => { location.href = './'; } }, icon('home-4-line'), ' Bosh sahifa'));
+    show('scr-result');
+  }
+
+  function buildWatermark() {
+    const wm = clear($('watermark'));
+    const label = `${S.info?.name || ''} • ${S.info?.classId || ''}`;
+    for (let i = 0; i < 40; i++) wm.append(h('span', { text: label }));
+    wm.hidden = false;
+  }
+
+  // ─── NAZORAT (PROCTORING) ──────────────────────────────────────────────────
+  async function report(type, detail = '', keepalive = false) {
+    if (!S.token || !S.active) return false;
+    try {
+      const r = await api('/api/attempt/event', { method: 'POST', attempt: S.token, body: { type, detail }, keepalive });
+      applyEventResult(r);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function showWarning(text) {
+    if (!S.active) return;
+    const st = S.state || {};
+    $('warn-text').textContent = text + ' Bu harakat o\'qituvchiga yuborildi.';
+    const v = Number($('q-viol-n').textContent.split('/')[0]) || st.violations || 0;
+    $('warn-count').textContent = st.max_violations > 0
+      ? `Qoidabuzarliklar: ${v} / ${st.max_violations}. Limitga yetganda test to'xtatiladi.`
+      : `Qoidabuzarliklar: ${v}`;
+    $('overlay-warning').hidden = false;
+    snapshot('violation');
+  }
+
+  function onVisibility() {
+    if (!S.active) return;
+    if (document.hidden) {
+      S.hiddenAt = Date.now();
+      S.hiddenReported = false;
+      report('tab_hidden', 'Boshqa ilova/oynaga o\'tdi', true).then(ok => { if (ok) S.hiddenReported = true; });
+    } else {
+      const secs = S.hiddenAt ? Math.round((Date.now() - S.hiddenAt) / 1000) : 0;
+      if (!S.hiddenReported) report('tab_hidden', `${secs} soniya test tashqarisida bo'ldi`);
+      else report('tab_return', `${secs} soniyadan keyin qaytdi`);
+      S.hiddenAt = 0;
+      showWarning(`Siz test oynasidan chiqdingiz (${secs} soniya).`);
+      heartbeat();
+    }
+  }
+
+  function onBlur() {
+    if (!S.active) return;
+    S.blurAt = Date.now();
+    S.focusLostReported = false;
+    clearTimeout(S.blurTimer);
+    S.blurTimer = setTimeout(() => {
+      if (S.active && !document.hidden && !document.hasFocus()) {
+        S.focusLostReported = true;
+        report('focus_lost', 'Ekran ustida boshqa oyna/ilova ochildi');
+      }
+    }, FOCUS_LOST_MS);
+  }
+
+  function onFocus() {
+    clearTimeout(S.blurTimer);
+    if (!S.active || !S.blurAt) return;
+    const ms = Date.now() - S.blurAt;
+    S.blurAt = 0;
+    if (document.hidden) return;
+    if (S.focusLostReported) showWarning(`Test oynasi ${Math.round(ms / 1000)} soniya fokusdan chiqdi.`);
+    else if (ms > 300) report('window_blur', `${(ms / 1000).toFixed(1)} soniya`);
+  }
+
+  function onFullscreenChange() {
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fsEl) { S.fullscreen = true; return; }
+    if (!S.active || !S.fullscreen || document.hidden) return;
+    S.fullscreen = false;
+    report('fullscreen_exit', 'To\'liq ekran rejimidan chiqdi');
+    showWarning('To\'liq ekran rejimidan chiqdingiz.');
+  }
+
+  function onResize() {
+    if (!S.active) return;
+    clearTimeout(S.timers.resize);
+    S.timers.resize = setTimeout(() => {
+      const area = innerWidth * innerHeight;
+      if (area > S.baseArea) { S.baseArea = area; return; }
+      if (!document.hidden && area < S.baseArea * 0.6) {
+        S.baseArea = area;
+        report('split_screen', `Oyna o'lchami: ${innerWidth}×${innerHeight}`);
+        showWarning('Ekran bo\'lindi yoki oyna kichraytirildi.');
+      }
+    }, 700);
+  }
+
+  function blockEvent(type, detail, message) {
+    return e => {
+      if (!S.active) return;
+      e.preventDefault();
+      if (type) report(type, detail);
+      if (message) toast(message, 'warn', 2000);
+    };
+  }
+
+  function onKeyDown(e) {
+    if (!S.active) return;
+    const k = (e.key || '').toLowerCase();
+    const mod = e.ctrlKey || e.metaKey;
+    if (e.key === 'F12' || (mod && e.shiftKey && ['i', 'j', 'c'].includes(k))) {
+      e.preventDefault();
+      report('devtools', 'Dasturchi vositalarini ochishga urinish');
       return;
     }
+    if (mod && ['c', 'x', 'v', 'a', 'p', 's', 'u', 'f', 'g'].includes(k)) {
+      e.preventDefault();
+      report('key_blocked', `Ctrl+${k.toUpperCase()}`);
+      toast('Bu amal taqiqlangan', 'warn', 1500);
+    }
+  }
 
-    // PDF + hisoblagich satri
-    const pdfBar = document.createElement('div');
-    pdfBar.className = 'tests-pdf-bar';
-    const pdfBtn = document.createElement('button');
-    pdfBtn.className = 'btn btn-primary';
-    pdfBtn.innerHTML = '<i class="ri-file-pdf-line"></i> SAVOLLARNI PDF YUKLASH';
-    pdfBtn.addEventListener('click', () => downloadTestsPDF(classId));
-    const countBadge = document.createElement('span');
-    countBadge.className = 'tests-count-badge';
-    countBadge.textContent = tests.length + ' ta savol';
-    pdfBar.appendChild(pdfBtn);
-    pdfBar.appendChild(countBadge);
-    box.appendChild(pdfBar);
+  function onKeyUp(e) {
+    if (S.active && e.key === 'PrintScreen') {
+      report('screenshot', 'PrintScreen tugmasi');
+      toast('Skrinshot olish taqiqlangan', 'warn', 2000);
+    }
+  }
 
-    tests.forEach((t, i) => {
-      let opts = [];
-      try {
-        opts = typeof t.options === 'string' ? JSON.parse(t.options) : t.options;
-      } catch (e) {
-        opts = [t.correct_answer];
-      }
-      const wrongOpts = opts.filter(o => o && o.trim() !== '' && o !== t.correct_answer);
+  function onBeforeUnload(e) {
+    if (!S.active) return;
+    e.preventDefault();
+    e.returnValue = '';
+  }
 
-      const row = document.createElement('div');
-      row.className = 'test-item-row';
-      row.dataset.testId = t.id;
+  function onOffline() {
+    if (S.active) S.offlineAt = Date.now();
+  }
 
-      // Ko'rish qismi
-      const viewMode = document.createElement('div');
-      viewMode.className = 'test-view-mode';
+  function onOnline() {
+    if (!S.active || !S.offlineAt) return;
+    const secs = Math.round((Date.now() - S.offlineAt) / 1000);
+    S.offlineAt = 0;
+    report('offline', `${secs} soniya internet o'chiq bo'ldi`);
+    heartbeat();
+  }
 
-      const numBadge = document.createElement('div');
-      numBadge.className = 'test-num';
-      numBadge.textContent = i + 1;
+  function onChannelMessage(e) {
+    if (e.data === 'ping' && S.active) {
+      spChannel.postMessage('busy');
+      report('multi_tab', 'Saytning boshqa varag\'i ochildi');
+      showWarning('Saytning boshqa varag\'i ochildi.');
+    }
+  }
 
-      const qText = document.createElement('div');
-      qText.className = 'test-question-text';
-      qText.textContent = t.question;
+  // Boshqa varaqda test ketayotganini tekshirish
+  function otherTabBusy(waitMs = 400) {
+    if (!spChannel) return Promise.resolve(false);
+    return new Promise(resolve => {
+      const onMsg = e => { if (e.data === 'busy') { spChannel.removeEventListener('message', onMsg); resolve(true); } };
+      spChannel.addEventListener('message', onMsg);
+      spChannel.postMessage('ping');
+      setTimeout(() => { spChannel.removeEventListener('message', onMsg); resolve(false); }, waitMs);
+    });
+  }
 
-      const answers = document.createElement('div');
-      answers.className = 'test-answers';
+  // ─── TO'LIQ EKRAN ──────────────────────────────────────────────────────────
+  function enterFullscreen() {
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!req) return;
+    try {
+      const p = req.call(el, { navigationUI: 'hide' });
+      if (p && p.catch) p.catch(() => {});
+    } catch { /* iPhone Safari to'liq ekranni qo'llamaydi */ }
+  }
 
-      const correctBadge = document.createElement('span');
-      correctBadge.className = 'answer-correct';
-      correctBadge.textContent = '✓ ' + t.correct_answer;
-      answers.appendChild(correctBadge);
+  function exitFullscreen() {
+    S.fullscreen = false;
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!fsEl) return;
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    try {
+      const p = exit.call(document);
+      if (p && p.catch) p.catch(() => {});
+    } catch { /* ignore */ }
+  }
 
-      wrongOpts.forEach(w => {
-        const wBadge = document.createElement('span');
-        wBadge.className = 'answer-wrong';
-        wBadge.textContent = '✗ ' + w;
-        answers.appendChild(wBadge);
+  // ─── KAMERA ────────────────────────────────────────────────────────────────
+  async function startCamera() {
+    if (S.stream) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('Brauzeringiz kamerani qo\'llab-quvvatlamaydi. Chrome yoki Safari\'dan foydalaning.');
+    }
+    try {
+      S.stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
+        audio: false
       });
-
-      const actionBtns = document.createElement('div');
-      actionBtns.className = 'test-action-buttons';
-
-      const editBtn = document.createElement('button');
-      editBtn.className = 'btn-edit-test';
-      editBtn.title = 'Tahrirlash';
-      editBtn.innerHTML = '<i class="ri-edit-line"></i>';
-      editBtn.addEventListener('click', () => editTestMode(t.id));
-
-      const delBtn = document.createElement('button');
-      delBtn.className = 'btn-delete-test';
-      delBtn.title = "O'chirish";
-      delBtn.innerHTML = '<i class="ri-close-line"></i>';
-      delBtn.addEventListener('click', () => delT(t.id));
-
-      actionBtns.appendChild(editBtn);
-      actionBtns.appendChild(delBtn);
-
-      viewMode.appendChild(numBadge);
-      viewMode.appendChild(qText);
-      viewMode.appendChild(answers);
-      viewMode.appendChild(actionBtns);
-
-      // Tahrirlash qismi
-      const editMode = document.createElement('div');
-      editMode.className = 'test-edit-mode';
-      editMode.style.display = 'none';
-
-      const qInput = document.createElement('input');
-      qInput.type = 'text';
-      qInput.id = 'eq-' + t.id;
-      qInput.value = t.question;
-      qInput.placeholder = 'Savol matni';
-
-      const editGrid = document.createElement('div');
-      editGrid.className = 'edit-grid';
-
-      const aInput = document.createElement('input');
-      aInput.type = 'text';
-      aInput.id = 'ea-' + t.id;
-      aInput.value = t.correct_answer;
-      aInput.placeholder = "To'g'ri javob";
-      aInput.style.borderColor = 'var(--primary)';
-
-      const w1Input = document.createElement('input');
-      w1Input.type = 'text';
-      w1Input.id = 'ew1-' + t.id;
-      w1Input.value = wrongOpts[0] || '';
-      w1Input.placeholder = 'Xato 1';
-
-      const w2Input = document.createElement('input');
-      w2Input.type = 'text';
-      w2Input.id = 'ew2-' + t.id;
-      w2Input.value = wrongOpts[1] || '';
-      w2Input.placeholder = 'Xato 2';
-
-      editGrid.appendChild(aInput);
-      editGrid.appendChild(w1Input);
-      editGrid.appendChild(w2Input);
-
-      const editActions = document.createElement('div');
-      editActions.className = 'edit-actions';
-
-      const saveBtn = document.createElement('button');
-      saveBtn.className = 'btn btn-primary';
-      saveBtn.innerHTML = '<i class="ri-save-line"></i> Saqlash';
-      saveBtn.addEventListener('click', () => saveEditTest(t.id));
-
-      const cancelBtn = document.createElement('button');
-      cancelBtn.className = 'btn';
-      cancelBtn.style.background = '#e2e8f0';
-      cancelBtn.textContent = 'Bekor';
-      cancelBtn.addEventListener('click', () => cancelEditTest(t.id));
-
-      editActions.appendChild(saveBtn);
-      editActions.appendChild(cancelBtn);
-
-      editMode.appendChild(qInput);
-      editMode.appendChild(editGrid);
-      editMode.appendChild(editActions);
-
-      row.appendChild(viewMode);
-      row.appendChild(editMode);
-      box.appendChild(row);
-    });
-  } catch (err) {
-    box.innerHTML = "<p style='color:red; padding:10px;'>Xatolik: " + err.message + "</p>";
-  }
-};
-
-// ─── TEST TAHRIRLASH MODLARI ───────────────────────────────────────────────────
-window.editTestMode = (testId) => {
-  const row = document.querySelector(`[data-test-id="${testId}"]`);
-  if (!row) return;
-  row.querySelector('.test-view-mode').style.display = 'none';
-  row.querySelector('.test-edit-mode').style.display = 'block';
-};
-
-window.cancelEditTest = (testId) => {
-  const row = document.querySelector(`[data-test-id="${testId}"]`);
-  if (!row) return;
-  row.querySelector('.test-view-mode').style.display = 'block';
-  row.querySelector('.test-edit-mode').style.display = 'none';
-};
-
-window.saveEditTest = async (testId) => {
-  const question = document.getElementById(`eq-${testId}`).value.trim();
-  const correct_answer = document.getElementById(`ea-${testId}`).value.trim();
-  const wrong1 = document.getElementById(`ew1-${testId}`).value.trim();
-  const wrong2 = document.getElementById(`ew2-${testId}`).value.trim();
-
-  if (!question || !correct_answer) return alert("Savol va to'g'ri javob kerak!");
-
-  const body = { question, correct_answer, wrong1, wrong2 };
-  try {
-    // Avval PUT, keyin PATCH bilan urinib ko'ramiz
-    const res = await fetch(API + '/api/tests/' + testId, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (res.status === 404 || res.status === 405) {
-      // PUT ishlamadi — server yangilanmagan, to'g'ridan DB'dan o'qib qayta yozamiz
-      throw new Error('Server yangi versiyasi Railway\'ga push qilinmagan! server.js ni GitHub\'ga push qilib, Railway\'da redeploy qiling.');
+    } catch {
+      throw new Error('Kameraga ruxsat berilmadi. Brauzer sozlamalaridan kameraga ruxsat bering.');
     }
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Server xatosi');
+    const v = $('cam-preview');
+    v.srcObject = S.stream;
+    v.hidden = false;
+    await v.play().catch(() => {});
+    const track = S.stream.getVideoTracks()[0];
+    if (track) {
+      track.addEventListener('ended', () => {
+        if (!S.active) return;
+        report('camera_off', 'Kamera o\'chirildi');
+        showWarning('Kamera o\'chirildi.');
+      });
     }
-    loadTTable();
-  } catch (err) {
-    alert("Xatolik: " + err.message);
   }
-};
 
-// ─── SAVOL O'CHIRISH ───────────────────────────────────────────────────────────
-window.delT = async (testId) => {
-  if (!confirm("Ushbu savolni o'chirasizmi?")) return;
-  try {
-    await api('/api/tests/' + testId, 'DELETE');
-    loadTTable();
-  } catch (err) {
-    alert("Xatolik: " + err.message);
+  function stopCamera() {
+    if (S.stream) S.stream.getTracks().forEach(t => t.stop());
+    S.stream = null;
+    const v = $('cam-preview');
+    v.srcObject = null;
+    v.hidden = true;
   }
-};
 
-// ─── TESTLARNI PDF YUKLASH (Yangi funksiya) ────────────────────────────────────
-window.downloadTestsPDF = async (classId) => {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  try {
-    const tests = await api('/api/classes/' + encodeURIComponent(classId) + '/tests');
-    if (tests.length === 0) return alert("Savollar yo'q!");
+  function snapshot(reason) {
+    if (!S.stream || !S.active) return;
+    const v = $('cam-preview');
+    if (!v.videoWidth) return;
+    const w = 320;
+    const hgt = Math.round((v.videoHeight * w) / v.videoWidth);
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = hgt;
+    c.getContext('2d').drawImage(v, 0, 0, w, hgt);
+    const image = c.toDataURL('image/jpeg', 0.6);
+    api('/api/attempt/snapshot', { method: 'POST', attempt: S.token, body: { image, reason } }).catch(() => {});
+  }
 
-    doc.setFontSize(16);
-    doc.text(classId + " - Savollar bazasi", 14, 15);
-    doc.setFontSize(10);
-    doc.text(`Jami: ${tests.length} ta savol`, 14, 22);
-
-    const rows = tests.map((t, i) => {
-      let opts = [];
-      try {
-        opts = typeof t.options === 'string' ? JSON.parse(t.options) : t.options;
-      } catch (e) {
-        opts = [t.correct_answer];
+  // ─── DAVOM ETTIRISH (sahifa qayta ochilganda) ─────────────────────────────
+  async function onResume() {
+    const btn = $('btn-resume');
+    btn.disabled = true;
+    enterFullscreen();
+    try {
+      if (S.settings.camera_mode === 'required') {
+        try {
+          await startCamera();
+        } catch (err) {
+          await api('/api/attempt/event', { method: 'POST', attempt: S.token, body: { type: 'camera_denied', detail: err.message } })
+            .catch(() => {});
+          toast(err.message, 'error', 5000);
+        }
       }
-      const wrongOpts = opts.filter(o => o && o.trim() !== '' && o !== t.correct_answer);
-      return [
-        i + 1,
-        t.question,
-        t.correct_answer,
-        wrongOpts.join(' / ') || '-'
-      ];
-    });
-
-    doc.autoTable({
-      head: [['#', 'Savol', "To'g'ri javob", 'Xato javoblar']],
-      body: rows,
-      startY: 28,
-      theme: 'grid',
-      headStyles: { fillColor: [16, 185, 129] },
-      columnStyles: {
-        0: { cellWidth: 12 },
-        1: { cellWidth: 80 },
-        2: { cellWidth: 45 },
-        3: { cellWidth: 45 }
-      },
-      tableWidth: 'wrap',
-      margin: { left: 10, right: 10 },
-      styles: { fontSize: 9, cellPadding: 3, overflow: 'linebreak' }
-    });
-
-    doc.save(`${classId}_savollar.pdf`);
-  } catch (err) {
-    alert("PDF yaratishda xatolik: " + err.message);
+      const state = await api('/api/attempt/state', { attempt: S.token });
+      $('overlay-resume').hidden = true;
+      if (state.status === 'active') beginQuiz(state);
+      else endQuiz(state);
+    } catch (err) {
+      if (err.status === 404 || err.status === 401) {
+        $('overlay-resume').hidden = true;
+        return sessionLost();
+      }
+      toast(err.message, 'error');
+    } finally {
+      btn.disabled = false;
+    }
   }
-};
 
-// ─── TEST BOSHLASH (AUTH) ──────────────────────────────────────────────────────
-// FIX: /api/grade/ o'rniga /api/classes/ ishlatildi - har bir sinf faqat o'zining testlarini oladi
-window.openAuth = async (id) => {
-  curClass = id;
+  // ─── ISHGA TUSHIRISH ───────────────────────────────────────────────────────
+  function bindEvents() {
+    $('reg-form').addEventListener('submit', onStart);
+    $('btn-back').addEventListener('click', () => show('scr-classes'));
+    $('btn-answer').addEventListener('click', () => { if (S.selected !== null) submit(S.selected); });
+    $('btn-warn-ok').addEventListener('click', () => {
+      $('overlay-warning').hidden = true;
+      if (S.active) enterFullscreen();
+    });
+    $('btn-resume').addEventListener('click', onResume);
 
-  try {
-    const tests = await api('/api/classes/' + encodeURIComponent(id) + '/tests');
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('blur', onBlur);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+    window.addEventListener('resize', onResize);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('online', onOnline);
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+    document.addEventListener('copy', blockEvent('copy', 'Nusxalashga urinish', 'Nusxalash taqiqlangan'));
+    document.addEventListener('cut', blockEvent('copy', 'Kesib olishga urinish', 'Nusxalash taqiqlangan'));
+    document.addEventListener('paste', blockEvent('paste', 'Joylashtirishga urinish', 'Joylashtirish taqiqlangan'));
+    document.addEventListener('contextmenu', blockEvent());
+    document.addEventListener('selectstart', blockEvent());
+    document.addEventListener('dragstart', blockEvent());
+    if (spChannel) spChannel.addEventListener('message', onChannelMessage);
+  }
 
-    if (tests.length === 0) {
-      return alert(id + " sinfiga test biriktirilmagan!");
+  async function init() {
+    bindEvents();
+    const settingsReady = loadSettings();
+    const token = store.get(TOKEN_KEY);
+    if (!token) {
+      await settingsReady;
+      return loadClasses();
     }
 
-    // Savollarni aralashtirib ko'rsatish
-    tList = tests.sort(() => Math.random() - 0.5);
-
-    document.getElementById('sel-c-title').innerText = id;
-    document.getElementById('v-home').classList.add('hidden');
-    document.getElementById('v-auth').classList.remove('hidden');
-  } catch (err) {
-    alert("Serverdan ma'lumot olishda xatolik: " + err.message);
-  }
-};
-
-// ─── TEST BOSHLASH ─────────────────────────────────────────────────────────────
-window.startQuiz = () => {
-  if (!document.getElementById('st-name').value.trim()) {
-    return alert("Iltimos, Ism Familiyangizni kiriting!");
-  }
-  document.getElementById('v-auth').classList.add('hidden');
-  document.getElementById('v-quiz').classList.remove('hidden');
-  qIdx = 0;
-  score = 0;
-  renderQ();
-};
-
-// ─── SAVOL RENDER ──────────────────────────────────────────────────────────────
-function renderQ() {
-  if (qIdx >= tList.length) return finish();
-  const q = tList[qIdx];
-  document.getElementById('q-text').innerText = `${qIdx + 1}. ${q.question}`;
-
-  const box = document.getElementById('opt-box');
-  box.innerHTML = "";
-
-  let options = [];
-  try {
-    options = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
-  } catch (e) {
-    options = [q.correct_answer];
-  }
-
-  [...options]
-    .filter(o => o && o.trim() !== '')
-    .sort(() => Math.random() - 0.5)
-    .forEach(o => {
-      const b = document.createElement('button');
-      b.className = "btn";
-      b.style.cssText = "background:white; border:2px solid #e2e8f0; width:100%; justify-content:flex-start; padding:15px;";
-      b.innerText = o;
-      b.onclick = () => {
-        if (o === q.correct_answer) score++;
-        qIdx++;
-        renderQ();
-      };
-      box.appendChild(b);
-    });
-}
-
-// ─── TEST YAKUNLASH ────────────────────────────────────────────────────────────
-async function finish() {
-  let team = document.getElementById('st-team').value.trim();
-  const name = document.getElementById('st-name').value.trim();
-
-  if (!team) team = "-";
-
-  document.getElementById('f-team').innerText = team;
-  document.getElementById('f-score').innerText = score;
-  document.getElementById('f-wrong').innerText = tList.length - score;
-  document.getElementById('m-finish').classList.add('active');
-
-  try {
-    await api('/api/results', 'POST', {
-      class_id: curClass,
-      team_name: team,
-      student_name: name,
-      score,
-      total: tList.length,
-      time_taken: new Date().toLocaleString('uz-UZ')
-    });
-  } catch (err) {
-    console.error("Natija saqlanmadi:", err.message);
-  }
-}
-
-// ─── NATIJALAR GRID ────────────────────────────────────────────────────────────
-window.loadResGrid = async () => {
-  const g = document.getElementById('res-grid');
-  g.innerHTML = "<p>Yuklanmoqda...</p>";
-  try {
-    const classes = await api('/api/classes');
-    g.innerHTML = "";
-    classes.forEach(c => {
-      const card = document.createElement('div');
-      card.className = 'card';
-      card.innerHTML = `<h3>${c.id}</h3>`;
-      card.addEventListener('click', () => openRes(c.id));
-      g.appendChild(card);
-    });
-  } catch (err) {
-    g.innerHTML = "<p style='color:red'>Xatolik: " + err.message + "</p>";
-  }
-};
-
-// ─── SINF NATIJALARINI OCHISH ──────────────────────────────────────────────────
-window.openRes = async (id) => {
-  document.getElementById('res-grid').classList.add('hidden');
-  document.getElementById('res-detail').classList.remove('hidden');
-  document.getElementById('res-c-name').innerText = id + " Natijalari";
-  document.getElementById('pdf-single-btn').onclick = () => downloadSinglePDF(id);
-
-  const tb = document.getElementById('res-tbody');
-  tb.innerHTML = "<tr><td colspan='6' style='text-align:center'>Yuklanmoqda...</td></tr>";
-
-  try {
-    const results = await api('/api/classes/' + encodeURIComponent(id) + '/results');
-    tb.innerHTML = "";
-
-    if (results.length === 0) {
-      tb.innerHTML = "<tr><td colspan='6' style='text-align:center; padding:20px'>Natija yo'q</td></tr>";
+    if (await otherTabBusy()) {
+      $('overlay-busy').hidden = false;
       return;
     }
-
-    results.forEach((r, idx) => {
-      let badgeStyle = "";
-      let placeLabel = idx + 1;
-
-      if (idx === 0) {
-        badgeStyle = "background-color:#fef08a; color:#854d0e; font-weight:900; border-radius:6px; padding:4px 8px;";
-        placeLabel = "🥇 1";
-      } else if (idx === 1) {
-        badgeStyle = "background-color:#e2e8f0; color:#334155; font-weight:900; border-radius:6px; padding:4px 8px;";
-        placeLabel = "🥈 2";
-      } else if (idx === 2) {
-        badgeStyle = "background-color:#ffedd5; color:#c2410c; font-weight:900; border-radius:6px; padding:4px 8px;";
-        placeLabel = "🥉 3";
-      }
-
-      const tr = document.createElement('tr');
-      tr.style.borderBottom = '1px solid #eee';
-      tr.innerHTML = `
-        <td style="padding:15px"><span style="${badgeStyle}">${placeLabel}</span></td>
-        <td style="padding:15px"><b>${r.team_name}</b></td>
-        <td style="padding:15px">${r.student_name}</td>
-        <td style="padding:15px"><b style="color:var(--primary)">${r.score} / ${r.total}</b></td>
-        <td style="padding:15px"><small>${r.time_taken || new Date(r.created_at).toLocaleString('uz-UZ')}</small></td>
-        <td style="padding:15px; text-align:right">
-          <button class="res-del-btn" title="O'chirish"><i class="ri-delete-bin-line"></i></button>
-        </td>
-      `;
-      tr.querySelector('.res-del-btn').addEventListener('click', () => delResult(r.id, id));
-      tb.appendChild(tr);
-    });
-  } catch (err) {
-    tb.innerHTML = "<tr><td colspan='6' style='color:red; padding:15px'>Xatolik: " + err.message + "</td></tr>";
-  }
-};
-
-// ─── NATIJA O'CHIRISH ──────────────────────────────────────────────────────────
-window.delResult = async (id, classId) => {
-  if (confirm("Ushbu natijani o'chirasizmi?")) {
+    S.token = token;
+    try { S.info = JSON.parse(store.get(INFO_KEY) || 'null'); } catch { S.info = null; }
     try {
-      await api('/api/results/' + id, 'DELETE');
-      openRes(classId);
-    } catch (err) {
-      alert("Xatolik: " + err.message);
-    }
-  }
-};
-
-// ─── PDF: ALOHIDA SINF NATIJALARI ─────────────────────────────────────────────
-window.downloadSinglePDF = async (className) => {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  try {
-    const results = await api('/api/classes/' + encodeURIComponent(className) + '/results');
-    const rows = results.map((r, idx) => [idx + 1, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
-    doc.text(className + " Sinf Natijalari", 14, 15);
-    doc.autoTable({ head: [["O'rin", 'Jamoa', 'Ism', 'Ball', 'Vaqt']], body: rows, startY: 20, theme: 'grid' });
-    doc.save(`${className}_natijalari.pdf`);
-  } catch (err) {
-    alert("PDF yaratishda xatolik: " + err.message);
-  }
-};
-
-// ─── PDF: BARCHA NATIJALAR ────────────────────────────────────────────────────
-window.downloadAllResultsPDF = async () => {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  let y = 20;
-
-  try {
-    const classes = allGlobalClasses.length > 0 ? allGlobalClasses : await api('/api/classes');
-    doc.setFontSize(18);
-    doc.text("STEAM PLAZA - UMUMIY NATIJALAR", 14, y);
-    y += 10;
-
-    for (const c of classes) {
-      const results = await api('/api/classes/' + encodeURIComponent(c.id) + '/results');
-      if (results.length > 0) {
-        if (y > 240) { doc.addPage(); y = 20; }
-        doc.setFontSize(14);
-        doc.text(c.id + " Sinf Natijalari", 14, y);
-        const rows = results.map((r, idx) => [idx + 1, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || '']);
-        doc.autoTable({ head: [["O'rin", 'Jamoa', 'Ism', 'Ball', 'Vaqt']], body: rows, startY: y + 2, theme: 'grid' });
-        y = doc.lastAutoTable.finalY + 15;
+      await settingsReady;
+      const state = await api('/api/attempt/state?resume=1', { attempt: token });
+      if (state.status === 'active') {
+        S.state = state;
+        $('overlay-resume').hidden = false;
+      } else {
+        store.del(TOKEN_KEY);
+        store.del(INFO_KEY);
+        showResult(state);
       }
-    }
-    doc.save("barcha_natijalar.pdf");
-  } catch (err) {
-    alert("PDF yaratishda xatolik: " + err.message);
-  }
-};
-
-// ─── PDF: FAQAT TOP-3 GO'LIBLAR ───────────────────────────────────────────────
-window.downloadTop3PDF = async () => {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  let y = 20;
-
-  try {
-    const classes = allGlobalClasses.length > 0 ? allGlobalClasses : await api('/api/classes');
-    doc.setFontSize(16);
-    doc.text("STEAM PLAZA - TOP-3 G'OLIBLAR (SINFLAR KESIMIDA)", 14, y);
-    y += 12;
-
-    for (const c of classes) {
-      const results = await api('/api/classes/' + encodeURIComponent(c.id) + '/results');
-      const top3 = results.slice(0, 3);
-
-      if (top3.length > 0) {
-        if (y > 240) { doc.addPage(); y = 20; }
-        doc.setFontSize(14);
-        doc.text(`${c.id} Sinf G'oliblari`, 14, y);
-
-        const rows = top3.map((r, idx) => {
-          let medal = idx + 1;
-          if (idx === 0) medal = "1 (Oltin)";
-          if (idx === 1) medal = "2 (Kumush)";
-          if (idx === 2) medal = "3 (Bronza)";
-          return [medal, r.team_name, r.student_name, `${r.score}/${r.total}`, r.time_taken || ''];
-        });
-
-        doc.autoTable({
-          head: [["O'rin", 'Jamoa', 'Ism', 'Ball', 'Vaqt']],
-          body: rows,
-          startY: y + 3,
-          theme: 'striped',
-          headStyles: { fillColor: [16, 185, 129] }
-        });
-        y = doc.lastAutoTable.finalY + 12;
-      }
-    }
-    doc.save("top3_sinflar_goliblari.pdf");
-  } catch (err) {
-    alert("PDF yaratishda xatolik: " + err.message);
-  }
-};
-
-// ─── BAZANI TOZALASH ───────────────────────────────────────────────────────────
-// ─── SINFDAN PARALLEL SINFLARGA TESTLARNI KO'PAYTIRISH ───────────────────────
-window.copyToParallel = async () => {
-  try {
-    const classes = await api('/api/classes');
-    if (classes.length === 0) return alert("Sinflar yo'q");
-
-    const classNames = classes.map(c => c.id).join(', ');
-    const chosen = prompt(
-      "Qaysi sinf testlarini parallel sinflarga tarqatmoqchisiz?\n\n" +
-      "Mavjud sinflar: " + classNames + "\n\n" +
-      "Sinf nomini kiriting (masalan: 2-A):"
-    );
-    if (!chosen) return;
-
-    const found = classes.find(c => c.id.toLowerCase() === chosen.trim().toLowerCase());
-    if (!found) return alert("'" + chosen + "' sinfi topilmadi!");
-
-    const grade = found.id.split('-')[0];
-    const parallels = classes.filter(c => c.id.split('-')[0] === grade && c.id !== found.id);
-    if (parallels.length === 0) return alert(grade + "-sinf parallel sinflari topilmadi!");
-
-    if (!confirm(
-      found.id + " dagi testlar quyidagi sinflarga ham qo'shiladi:\n" +
-      parallels.map(c => c.id).join(', ') + "\n\n" +
-      "Allaqachon mavjud testlar o'tkazib yuboriladi. Davom etasizmi?"
-    )) return;
-
-    const result = await api('/api/classes/' + encodeURIComponent(found.id) + '/copy-to-parallel', 'POST');
-    alert(
-      "Tayyor! " + found.id + " dan " + result.parallelClasses.join(', ') +
-      " sinflariga " + result.totalAdded + " ta test qo'shildi."
-    );
-  } catch (err) {
-    alert("Xatolik: " + err.message);
-  }
-};
-
-window.clearDb = async () => {
-  if (confirm("Hammasi o'chadi! Davom etasizmi?")) {
-    try {
-      await api('/api/clear-all', 'DELETE');
-      location.reload();
     } catch (err) {
-      alert("Xatolik: " + err.message);
+      if (err.status === 404 || err.status === 401) {
+        store.del(TOKEN_KEY);
+        store.del(INFO_KEY);
+        return loadClasses();
+      }
+      toast(err.message, 'error', 6000);
+      $('overlay-resume').hidden = false;
     }
   }
-};
 
-// ─── SINFDAGI DUPLIKAT TESTLARNI TOZALASH ────────────────────────────────────
-window.dedupAllClasses = async () => {
-  try {
-    const classes = await api('/api/classes');
-    if (classes.length === 0) return alert("Sinflar yo'q");
-
-    // Qaysi sinfni tozalash kerakligini so'raymiz
-    const classNames = classes.map(c => c.id).join(', ');
-    const chosen = prompt(
-      "Qaysi sinfdagi takroriy testlarni o'chirmoqchisiz?\n\nMavjud sinflar: " + classNames + "\n\nSinf nomini kiriting (masalan: 2-A):"
-    );
-    if (!chosen) return;
-
-    const found = classes.find(c => c.id.toLowerCase() === chosen.trim().toLowerCase());
-    if (!found) return alert("'" + chosen + "' sinfi topilmadi!");
-
-    if (!confirm(found.id + " sinfidagi TAKRORIY testlar o'chiriladi. Boshqa sinflarga ta'sir etmaydi. Davom etasizmi?")) return;
-
-    const result = await api('/api/classes/' + encodeURIComponent(found.id) + '/dedup', 'DELETE');
-    alert("Tayyor! " + found.id + " sinfidan " + (result.deleted || 0) + " ta takroriy savol o'chirildi.");
-    loadTTable();
-  } catch (err) {
-    alert("Xatolik: " + err.message);
-  }
-};
-
-// ─── ISHGA TUSHIRISH ───────────────────────────────────────────────────────────
-loadData();
+  init();
+})();

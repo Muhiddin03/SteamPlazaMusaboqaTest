@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="no-referrer">
+    <title>Steam Plaza | Admin</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="admin">
+
+    <!-- ─── KIRISH ─── -->
+    <section id="login-view" class="login-view" hidden>
+        <form id="login-form" class="card login-card" novalidate>
+            <a class="logo logo-dark" href="./">STEAM <span>PLAZA</span></a>
+            <h2>Admin panelga kirish</h2>
+            <label class="field">
+                <span>Login</span>
+                <input id="login-user" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="50" value="admin">
+            </label>
+            <label class="field">
+                <span>Parol</span>
+                <span class="input-wrap">
+                    <input id="login-pass" type="password" autocomplete="current-password" maxlength="128">
+                    <button type="button" class="input-btn" id="toggle-pass" aria-label="Parolni ko'rsatish"><i class="ri-eye-line"></i></button>
+                </span>
+            </label>
+            <p class="form-error" id="login-error" role="alert"></p>
+            <button class="btn btn-primary btn-block btn-lg" type="submit" id="login-btn"><i class="ri-login-box-line"></i> Kirish</button>
+            <a class="back-link center" href="./"><i class="ri-arrow-left-line"></i> Test sahifasiga</a>
+        </form>
+    </section>
+
+    <!-- ─── PANEL ─── -->
+    <div id="app-view" class="app" hidden>
+        <header class="topbar">
+            <a class="logo" href="./">STEAM <span>PLAZA</span></a>
+            <div class="topbar-right">
+                <span class="chip chip-dark" id="admin-name"><i class="ri-user-3-line"></i></span>
+                <button class="topbar-btn" id="btn-logout" type="button" title="Chiqish" aria-label="Chiqish"><i class="ri-logout-box-r-line"></i></button>
+            </div>
+        </header>
+
+        <nav class="nav" id="nav" aria-label="Bo'limlar">
+            <button class="nav-item active" data-tab="results" type="button"><i class="ri-line-chart-line"></i><span>Natijalar</span></button>
+            <button class="nav-item" data-tab="tests" type="button"><i class="ri-question-answer-line"></i><span>Savollar</span></button>
+            <button class="nav-item" data-tab="classes" type="button"><i class="ri-team-line"></i><span>Sinflar</span></button>
+            <button class="nav-item" data-tab="settings" type="button"><i class="ri-settings-3-line"></i><span>Sozlamalar</span></button>
+        </nav>
+
+        <main class="app-main">
+
+            <!-- NATIJALAR -->
+            <section id="tab-results" class="tab">
+                <div class="tab-head">
+                    <h1>Natijalar va nazorat</h1>
+                    <span class="live" id="live-dot" title="Har 10 soniyada yangilanadi"><span></span> Jonli</span>
+                </div>
+                <div class="toolbar">
+                    <select id="res-class" aria-label="Sinf"></select>
+                    <select id="res-filter" aria-label="Saralash">
+                        <option value="all">Hammasi</option>
+                        <option value="active">Hozir yechmoqda</option>
+                        <option value="suspicious">Shubhali</option>
+                        <option value="finished">Yakunlangan</option>
+                        <option value="terminated">To'xtatilgan</option>
+                    </select>
+                    <button class="btn btn-ghost" id="btn-pdf" type="button"><i class="ri-file-pdf-2-line"></i> PDF</button>
+                    <button class="btn btn-ghost" id="btn-top3" type="button"><i class="ri-trophy-line"></i> TOP-3</button>
+                </div>
+                <div class="stats" id="res-stats"></div>
+                <div class="list" id="res-list"></div>
+            </section>
+
+            <!-- SAVOLLAR -->
+            <section id="tab-tests" class="tab" hidden>
+                <h1>Savollar bazasi</h1>
+                <div class="card">
+                    <label class="field">
+                        <span>Sinf</span>
+                        <select id="t-class"></select>
+                    </label>
+                    <div class="class-tools">
+                        <button class="btn btn-ghost btn-sm" id="t-pdf" type="button"><i class="ri-file-pdf-2-line"></i> Savollar PDF</button>
+                        <button class="btn btn-ghost btn-sm" id="t-copy" type="button"><i class="ri-share-forward-line"></i> Parallel sinflarga tarqatish</button>
+                        <button class="btn btn-ghost btn-sm" id="t-dedup" type="button"><i class="ri-scissors-cut-line"></i> Takrorlarni tozalash</button>
+                    </div>
+                    <form id="t-form" novalidate>
+                        <label class="field">
+                            <span>Savol matni</span>
+                            <textarea id="t-question" rows="3" maxlength="1000" placeholder="Savolni yozing"></textarea>
+                        </label>
+                        <label class="field">
+                            <span>To'g'ri javob</span>
+                            <input id="t-correct" class="input-correct" maxlength="300" placeholder="To'g'ri javob">
+                        </label>
+                        <div class="grid-3">
+                            <label class="field"><span>Xato javob 1</span><input id="t-wrong1" maxlength="300"></label>
+                            <label class="field"><span>Xato javob 2</span><input id="t-wrong2" maxlength="300"></label>
+                            <label class="field"><span>Xato javob 3 <small>(ixtiyoriy)</small></span><input id="t-wrong3" maxlength="300"></label>
+                        </div>
+                        <div class="targets" id="t-targets-box">
+                            <div class="targets-head">
+                                <span>Yana qaysi sinflarga qo'shilsin?</span>
+                                <span class="row-tight">
+                                    <button class="btn btn-ghost btn-sm" type="button" id="t-sel-parallel">Shu parallel</button>
+                                    <button class="btn btn-ghost btn-sm" type="button" id="t-sel-clear">Tozalash</button>
+                                </span>
+                            </div>
+                            <div class="targets-list" id="t-targets"></div>
+                        </div>
+                        <p class="form-error" id="t-error" role="alert"></p>
+                        <div class="row">
+                            <button class="btn btn-primary" type="submit" id="t-save"><i class="ri-save-line"></i> Saqlash</button>
+                            <button class="btn btn-ghost" type="button" id="t-cancel" hidden>Bekor qilish</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card bulk-card">
+                    <h2><i class="ri-upload-cloud-2-line"></i> Ommaviy yuklash (JSON / CSV)</h2>
+                    <p class="muted small">Ustunlar: <b>class_id, question, correct_answer, wrong1, wrong2</b> (wrong3 ixtiyoriy). Sinfda bor savollar qayta qo'shilmaydi.</p>
+                    <div class="row">
+                        <input type="file" id="bulk-file" accept=".json,.csv,application/json,text/csv" aria-label="Fayl tanlash">
+                        <button class="btn btn-primary" type="button" id="bulk-upload"><i class="ri-upload-2-line"></i> Yuklash</button>
+                    </div>
+                    <div id="bulk-status" class="bulk-status" aria-live="polite"></div>
+                </div>
+                <div class="tab-head"><h2 id="t-count">Savollar</h2></div>
+                <div class="list" id="t-list"></div>
+            </section>
+
+            <!-- SINFLAR -->
+            <section id="tab-classes" class="tab" hidden>
+                <h1>Sinflar</h1>
+                <form class="card row" id="c-form" novalidate>
+                    <input id="c-name" maxlength="50" placeholder="Yangi sinf (masalan: 7-A)" aria-label="Sinf nomi">
+                    <button class="btn btn-primary" type="submit"><i class="ri-add-line"></i> Qo'shish</button>
+                </form>
+                <p class="muted small">Maslahat: "7-A", "7-B" kabi nomlang — shunda savollarni parallel sinflarga bir bosishda tarqatish mumkin.</p>
+                <div class="class-grid" id="c-list"></div>
+            </section>
+
+            <!-- SOZLAMALAR -->
+            <section id="tab-settings" class="tab" hidden>
+                <h1>Sozlamalar</h1>
+
+                <form class="card" id="s-form" novalidate>
+                    <h2><i class="ri-shield-check-line"></i> Test va nazorat</h2>
+                    <div class="grid-2">
+                        <label class="field">
+                            <span>Har bir savolga vaqt (soniya)</span>
+                            <input id="s-time" type="number" min="10" max="600" inputmode="numeric">
+                            <small>Qisqa vaqt — kitob yoki AI'dan foydalanishga ulgurmaydi. Tavsiya: 30–60.</small>
+                        </label>
+                        <label class="field">
+                            <span>Maks. qoidabuzarlik</span>
+                            <input id="s-viol" type="number" min="0" max="50" inputmode="numeric">
+                            <small>Shunchaga yetsa test to'xtatiladi. 0 = to'xtatilmaydi.</small>
+                        </label>
+                        <label class="field">
+                            <span>Har o'quvchiga savollar soni</span>
+                            <input id="s-count" type="number" min="0" max="500" inputmode="numeric">
+                            <small>Bazadan tasodifiy tanlanadi. 0 = barchasi.</small>
+                        </label>
+                        <label class="field">
+                            <span>Kamera nazorati</span>
+                            <select id="s-camera">
+                                <option value="off">O'chiq</option>
+                                <option value="required">Majburiy (surat olib turiladi)</option>
+                            </select>
+                            <small>Yoqsangiz, ota-onalar roziligini oldindan oling.</small>
+                        </label>
+                    </div>
+                    <label class="check"><input type="checkbox" id="s-share"> <span>Parallel sinflar savollari aralash berilsin (7-A o'quvchisiga 7-A, 7-B... dagi barcha savollar). O'chiq bo'lsa — har sinf faqat o'z savollarini oladi</span></label>
+                    <label class="check"><input type="checkbox" id="s-score"> <span>Test oxirida o'quvchiga natijasi ko'rsatilsin</span></label>
+                    <button class="btn btn-primary" type="submit"><i class="ri-save-line"></i> Saqlash</button>
+                </form>
+
+                <form class="card" id="p-form" novalidate>
+                    <h2><i class="ri-lock-password-line"></i> Parolni o'zgartirish</h2>
+                    <input type="text" autocomplete="username" id="p-username" hidden>
+                    <label class="field"><span>Joriy parol</span><input id="p-current" type="password" autocomplete="current-password" maxlength="128"></label>
+                    <label class="field"><span>Yangi parol</span><input id="p-new" type="password" autocomplete="new-password" maxlength="128"></label>
+                    <div class="strength" id="p-strength"><div></div></div>
+                    <label class="field"><span>Yangi parolni takrorlang</span><input id="p-new2" type="password" autocomplete="new-password" maxlength="128"></label>
+                    <small class="muted">Kamida 10 belgi, harf va raqam. Katta-kichik harf va belgi (!@#) qo'shsangiz yanada kuchli. O'zgartirilgach boshqa qurilmalardagi sessiyalar yopiladi.</small>
+                    <p class="form-error" id="p-error" role="alert"></p>
+                    <button class="btn btn-primary" type="submit"><i class="ri-key-2-line"></i> Parolni yangilash</button>
+                </form>
+
+                <div class="card danger-zone">
+                    <h2><i class="ri-error-warning-line"></i> Bazani butunlay tozalash</h2>
+                    <p>Barcha sinflar, savollar, natijalar va kamera suratlari o'chiriladi. Bu amalni qaytarib bo'lmaydi.</p>
+                    <button class="btn btn-danger" id="btn-clear" type="button"><i class="ri-delete-bin-2-line"></i> Barchasini o'chirish</button>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="common.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>

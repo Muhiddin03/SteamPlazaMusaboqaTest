@@ -60,7 +60,19 @@
                     <h1>Jonli kuzatuv</h1>
                     <span class="live" id="live-dot2" title="Har 4 soniyada yangilanadi"><span></span> Jonli</span>
                 </div>
-                <p class="muted small">Hozir test yechayotgan o'quvchilar. Kamera kadri har 4 soniyada yangilanadi. Qizil ramka — yaqinda qoidabuzarlik bo'lgan. Batafsil ko'rish yoki testni to'xtatish uchun o'quvchini bosing.</p>
+                <div class="live-controls card">
+                    <label class="switch">
+                        <input type="checkbox" id="live-camera">
+                        <span class="switch-ui"></span>
+                        <span><b>Kamera nazorati</b><small id="live-camera-note">Yangi boshlanadigan testlarga qo'llanadi</small></span>
+                    </label>
+                    <label class="switch">
+                        <input type="checkbox" id="live-sound" checked>
+                        <span class="switch-ui"></span>
+                        <span><b>Ovozli signal</b><small>Xavf aniqlanganda ovoz chiqadi</small></span>
+                    </label>
+                </div>
+                <p class="muted small">Kadr har 4 soniyada yangilanadi. O'quvchini bossangiz — katta oynada <b>har soniyada</b> ko'rasiz. Tizim o'zi kuzatadi: kameradan chiqish, boshqa odam, bosh burish, pastga qarash, ortiqcha harakat — qizil ramka va signal bilan bildiriladi.</p>
                 <div class="live-grid" id="live-grid"></div>
             </section>
 

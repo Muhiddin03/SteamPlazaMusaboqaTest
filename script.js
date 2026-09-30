@@ -28,8 +28,20 @@
     blurTimer: null,
     focusLostReported: false,
     offlineAt: 0,
+    face: null,
+    faceSince: {},
+    faceReported: {},
     timers: {}
   };
+
+  // Kamera orqali aniqlanadigan holatlar: [turi, banner ko'rsatish (ms), xabar yuborish (ms), matn]
+  const FACE_RULES = [
+    ['face_missing', 800, 5000, 'Yuzingiz kamerada ko\'rinmayapti! Kameraga qarang.'],
+    ['multiple_faces', 500, 3000, 'Kamerada boshqa odam bor! Yolg\'iz ishlang.'],
+    ['head_turned', 1200, 3000, 'Boshingizni burmang — ekranga qarang!'],
+    ['looking_down', 1200, 3000, 'Pastga qaramang — ekranga qarang!'],
+    ['motion', 800, 2500, 'Ortiqcha harakat qilmang!']
+  ];
 
   // ─── EKRANLAR ──────────────────────────────────────────────────────────────
   function show(id) {
@@ -109,8 +121,13 @@
     $('modal-rules').hidden = false;
   }
 
+  function preloadFace() {
+    import('./face-monitor.js').then(m => m.preloadFaceModel()).catch(() => { /* testda qayta urinadi */ });
+  }
+
   function onRulesOk() {
     if (S.settings.camera_mode === 'required') {
+      preloadFace();
       $('modal-rules').hidden = true;
       $('camera-error').textContent = '';
       $('modal-camera').hidden = false;
@@ -162,9 +179,10 @@
     clearInterval(S.timers.snap);
     S.timers.hb = setInterval(heartbeat, HEARTBEAT_MS);
     if (S.stream) {
-      // Jonli kuzatuv kadri; server har 30 soniyada bittasini saqlaydi
-      S.timers.snap = setInterval(() => snapshot('live'), LIVE_FRAME_MS);
+      // Jonli kuzatuv kadri; admin kuzatayotgan bo'lsa server tezroq so'raydi
       setTimeout(() => snapshot('start'), 1500);
+      scheduleFrame(2500);
+      startFaceMonitor();
     }
     render(state);
   }
@@ -562,6 +580,8 @@
   }
 
   function stopCamera() {
+    if (S.face) { S.face.stop(); S.face = null; }
+    $('face-banner').hidden = true;
     if (S.stream) S.stream.getTracks().forEach(t => t.stop());
     S.stream = null;
     const v = $('cam-preview');
@@ -569,18 +589,77 @@
     v.hidden = true;
   }
 
-  function snapshot(reason) {
-    if (!S.stream || !S.active) return;
+  // Kadr yuboradi; server keyingi kadr qachon kerakligini aytadi (admin kuzatsa — har soniyada)
+  async function snapshot(reason) {
+    if (!S.stream || !S.active) return null;
     const v = $('cam-preview');
-    if (!v.videoWidth) return;
-    const w = 320;
+    if (!v.videoWidth) return null;
+    const w = reason === 'live' ? 240 : 320;
     const hgt = Math.round((v.videoHeight * w) / v.videoWidth);
     const c = document.createElement('canvas');
     c.width = w;
     c.height = hgt;
     c.getContext('2d').drawImage(v, 0, 0, w, hgt);
-    const image = c.toDataURL('image/jpeg', 0.6);
-    api('/api/attempt/snapshot', { method: 'POST', attempt: S.token, body: { image, reason } }).catch(() => {});
+    const image = c.toDataURL('image/jpeg', reason === 'live' ? 0.5 : 0.6);
+    try {
+      return await api('/api/attempt/snapshot', { method: 'POST', attempt: S.token, body: { image, reason } });
+    } catch {
+      return null;
+    }
+  }
+
+  function scheduleFrame(ms) {
+    clearTimeout(S.timers.frame);
+    S.timers.frame = setTimeout(async () => {
+      if (!S.active || !S.stream) return;
+      const r = await snapshot('live');
+      if (S.active) scheduleFrame(r && r.next_ms ? r.next_ms : LIVE_FRAME_MS);
+    }, ms);
+  }
+
+  // ─── YUZ KUZATUVI ──────────────────────────────────────────────────────────
+  async function startFaceMonitor() {
+    if (S.face || !S.stream) return;
+    try {
+      const { startFaceMonitor: start } = await import('./face-monitor.js');
+      if (!S.active || !S.stream) return;
+      S.face = await start($('cam-preview'), onFaceSample);
+    } catch (err) {
+      console.warn('Yuz kuzatuvi yuklanmadi:', err);
+      report('ai_unavailable', 'Yuzni aniqlash moduli yuklanmadi');
+    }
+  }
+
+  function onFaceSample(s) {
+    if (!S.active) return;
+    const now = Date.now();
+    const active = {
+      face_missing: s.faces === 0,
+      multiple_faces: s.faces >= 2,
+      head_turned: s.faces === 1 && s.turned,
+      looking_down: s.faces === 1 && s.down,
+      motion: s.motion
+    };
+    let banner = null;
+    for (const [type, showAfter, reportAfter, text] of FACE_RULES) {
+      if (!active[type]) {
+        delete S.faceSince[type];
+        delete S.faceReported[type];
+        continue;
+      }
+      const since = S.faceSince[type] || (S.faceSince[type] = now);
+      const dur = now - since;
+      if (dur >= showAfter && !banner) banner = text;
+      if (dur >= reportAfter && !S.faceReported[type]) {
+        S.faceReported[type] = true;
+        report(type, `${(dur / 1000).toFixed(1)} soniya`);
+        snapshot('violation');
+        if (navigator.vibrate) navigator.vibrate(200);
+      }
+    }
+    const el = $('face-banner');
+    el.hidden = !banner;
+    if (banner) el.textContent = banner;
   }
 
   // ─── DAVOM ETTIRISH (sahifa qayta ochilganda) ─────────────────────────────

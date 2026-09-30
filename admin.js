@@ -52,6 +52,12 @@
     connection_gap: 'Aloqa uzildi',
     reload: 'Sahifani qayta yukladi',
     fast_answer: 'Juda tez javob berdi',
+    face_missing: 'Kameradan chiqib ketdi (yuz ko\'rinmadi)',
+    multiple_faces: 'Kamerada boshqa odam bor',
+    head_turned: 'Boshini yon tomonga burdi',
+    looking_down: 'Pastga qaradi (kitob/telefon?)',
+    motion: 'Ortiqcha harakat',
+    ai_unavailable: 'Yuzni aniqlash ishlamadi',
     auto_terminated: 'Test avtomatik to\'xtatildi',
     admin_terminated: 'Admin testni to\'xtatdi',
     abandoned: 'Test tashlab ketildi'
@@ -128,6 +134,7 @@
     for (const s of document.querySelectorAll('.tab')) s.hidden = s.id !== 'tab-' + tab;
     clearInterval(A.refreshTimer);
     if (tab === 'live') {
+      syncCameraSwitch();
       loadLive();
       A.refreshTimer = setInterval(() => { if (!document.hidden && !A.detailOpen) loadLive(); }, LIVE_REFRESH_MS);
     }
@@ -175,14 +182,23 @@
         const img = h('img', { alt: '' });
         const cam = h('div', { class: 'live-cam' }, img, h('span', { class: 'live-nocam' }, icon('camera-off-line'), ' Kadr yo\'q'));
         const info = h('div', { class: 'live-info' });
-        const el = h('button', { class: 'live-tile', type: 'button', onclick: () => openAttempt(r.id) }, cam, info);
-        tile = { el, img, cam, info, frameAt: null, url: null };
+        const el = h('button', { class: 'live-tile', type: 'button', onclick: () => openFocus(r.id) }, cam, info);
+        tile = { el, img, cam, info, frameAt: null, url: null, lastAlertId: null };
         A.liveTiles.set(r.id, tile);
         grid.append(el);
       }
-      const recentViolation = r.last_violation_at && Date.now() - new Date(r.last_violation_at) < 30000;
-      tile.el.classList.toggle('alert', !!recentViolation);
-      tile.el.classList.toggle('warned', r.violations > 0);
+      tile.row = r;
+      const alert = r.last_alert;
+      const recentAlert = alert && Date.now() - new Date(alert.at) < 30000;
+      tile.el.classList.toggle('alert', !!recentAlert);
+      tile.el.classList.toggle('warned', r.violations > 0 || r.alert_count > 0);
+      // Yangi xavf signali — ovoz va bildirishnoma
+      if (alert && alert.id !== tile.lastAlertId) {
+        if (tile.lastAlertId !== null || recentAlert) notifyAlert(r, alert);
+        tile.lastAlertId = alert.id;
+      } else if (!alert && tile.lastAlertId === null) {
+        tile.lastAlertId = 0;
+      }
       // h() orqali: null bolalar tashlab yuboriladi (append'ning o'zi "null" deb yozib qo'yadi)
       const info = h('div', { class: 'live-info' },
         h('b', { text: r.student_name }),
@@ -190,8 +206,8 @@
           h('span', { class: 'chip', text: r.class_id }),
           h('span', { text: `${Math.min(r.current_index + 1, r.question_count || 0)}/${r.question_count || 0}` }),
           r.violations > 0 ? h('span', { class: 'badge risk-high' }, icon('alarm-warning-line'), ` ${r.violations}`) : null),
-        recentViolation && r.last_violation_type
-          ? h('small', { class: 'live-warn', text: EVENTS[r.last_violation_type] || r.last_violation_type })
+        recentAlert
+          ? h('small', { class: 'live-warn' }, icon('alarm-warning-fill'), ' ', EVENTS[alert.type] || alert.type)
           : null);
       tile.info.replaceWith(info);
       tile.info = info;
@@ -212,6 +228,134 @@
       }
     }
   }
+
+  // Xavf signali: ovoz + ekranda bildirishnoma
+  let audioCtx = null;
+  function beep() {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t = audioCtx.currentTime;
+      for (const [start, freq] of [[0, 880], [0.18, 660]]) {
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.frequency.value = freq;
+        o.connect(g);
+        g.connect(audioCtx.destination);
+        g.gain.setValueAtTime(0.18, t + start);
+        g.gain.exponentialRampToValueAtTime(0.001, t + start + 0.16);
+        o.start(t + start);
+        o.stop(t + start + 0.17);
+      }
+    } catch { /* ovoz qo'llanmasa — faqat bildirishnoma */ }
+  }
+
+  function notifyAlert(r, alert) {
+    if ($('live-sound').checked) beep();
+    toast(`${r.student_name}: ${EVENTS[alert.type] || alert.type}`, 'error', 6000);
+  }
+
+  // ─── Kamera nazoratini yoqish/o'chirish ───
+  async function syncCameraSwitch() {
+    try {
+      const s = await aapi('/api/admin/settings');
+      $('live-camera').checked = s.camera_mode === 'required';
+    } catch { /* ignore */ }
+  }
+
+  async function onCameraSwitch() {
+    const sw = $('live-camera');
+    const on = sw.checked;
+    sw.disabled = true;
+    try {
+      await aapi('/api/admin/settings', { method: 'PUT', body: { camera_mode: on ? 'required' : 'off' } });
+      toast(on ? 'Kamera nazorati yoqildi — yangi boshlanadigan testlarda kamera majburiy'
+        : 'Kamera nazorati o\'chirildi', 'success', 5000);
+    } catch (err) {
+      sw.checked = !on;
+      toast(err.message, 'error');
+    } finally {
+      sw.disabled = false;
+    }
+  }
+
+  // ─── O'quvchini katta oynada kuzatish (kadr har soniyada) ───
+  function openFocus(id) {
+    const r = A.liveTiles.get(id)?.row;
+    if (!r) return openAttempt(id);
+    let stopped = false;
+    let url = null;
+    const sleep = ms => new Promise(res => setTimeout(res, ms));
+
+    const img = h('img', { class: 'focus-img', alt: `${r.student_name} kamerasi` });
+    const cam = h('div', { class: 'focus-cam' }, img,
+      h('span', { class: 'focus-live' }, h('span'), ' JONLI'),
+      h('span', { class: 'live-nocam' }, icon('camera-off-line'), ' Kadr kelmayapti'));
+    const status = h('div', { class: 'focus-status' });
+    const events = h('div', {});
+
+    const close = openModal({
+      title: r.student_name,
+      wide: true,
+      body: h('div', { class: 'focus' }, cam, status, h('h4', {}, icon('shield-user-line'), ' Oxirgi hodisalar'), events),
+      actions: [
+        h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => { close(); openAttempt(id); } },
+          icon('file-list-3-line'), ' Batafsil'),
+        h('button', { class: 'btn btn-danger', type: 'button', onclick: async () => {
+          if (!await confirmDialog(`${r.student_name} testi hozir to'xtatilsinmi?`, { okText: 'To\'xtatish', danger: true })) return;
+          try {
+            await aapi(`/api/admin/attempts/${id}/terminate`, { method: 'POST' });
+            toast('Test to\'xtatildi', 'success');
+            close();
+            loadLive();
+          } catch (err) { toast(err.message, 'error'); }
+        } }, icon('stop-circle-line'), ' To\'xtatish')
+      ],
+      onClose: () => {
+        stopped = true;
+        if (url) URL.revokeObjectURL(url);
+      }
+    });
+
+    (async () => {
+      while (!stopped) {
+        try {
+          const res = await aapi(`/api/admin/live/${id}/frame?focus=1`, { raw: true });
+          const u = URL.createObjectURL(await res.blob());
+          if (stopped) { URL.revokeObjectURL(u); break; }
+          img.src = u;
+          if (url) URL.revokeObjectURL(url);
+          url = u;
+          cam.classList.add('has-frame');
+        } catch {
+          cam.classList.remove('has-frame');
+        }
+        await sleep(1000);
+      }
+    })();
+
+    (async () => {
+      while (!stopped) {
+        try {
+          const d = await aapi('/api/admin/attempts/' + id);
+          const st = STATUS[d.status] || { label: d.status, cls: '' };
+          clear(status).append(
+            h('span', { class: 'chip', text: d.class_id }),
+            h('span', { class: 'badge ' + st.cls, text: st.label }),
+            h('span', { text: `${Math.min(d.current_index + 1, d.question_count || 0)}/${d.question_count || 0}-savol` }),
+            h('span', { class: 'badge ' + (d.violations ? 'risk-high' : 'risk-low') }, icon('alarm-warning-line'), ` ${d.violations} qoidabuzarlik`));
+          const recent = d.events.slice(-8).reverse();
+          clear(events).append(recent.length
+            ? h('ol', { class: 'timeline' }, recent.map(e => h('li', { class: e.is_violation || ALERT_UI.has(e.type) ? 'viol' : '' },
+              h('time', { text: fmtTime(e.created_at) }),
+              h('div', {}, h('b', { text: EVENTS[e.type] || e.type }), e.detail ? h('div', { class: 'muted small', text: e.detail }) : null))))
+            : h('p', { class: 'muted', text: 'Hozircha hodisa yo\'q — o\'quvchi qoidaga amal qilmoqda.' }));
+        } catch { /* keyingi urinishda */ }
+        await sleep(3000);
+      }
+    })();
+  }
+
+  const ALERT_UI = new Set(['face_missing', 'multiple_faces', 'head_turned', 'looking_down', 'motion']);
 
   // ─── SINFLAR ───────────────────────────────────────────────────────────────
   async function loadClasses() {
@@ -929,6 +1073,12 @@
 
     $('res-class').addEventListener('change', () => loadAttempts());
     $('res-filter').addEventListener('change', renderAttempts);
+    $('live-camera').addEventListener('change', onCameraSwitch);
+    $('live-sound').checked = store.get('sp_sound') !== 'off';
+    $('live-sound').addEventListener('change', () => {
+      store.set('sp_sound', $('live-sound').checked ? 'on' : 'off');
+      if ($('live-sound').checked) beep();
+    });
     $('btn-pdf').addEventListener('click', () => downloadPdf(false));
     $('btn-top3').addEventListener('click', () => downloadPdf(true));
     $('t-pdf').addEventListener('click', downloadTestsPdf);

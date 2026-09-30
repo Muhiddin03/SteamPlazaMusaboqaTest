@@ -4,11 +4,11 @@
   const TOKEN_KEY = 'sp_attempt';
   const INFO_KEY = 'sp_attempt_info';
   const HEARTBEAT_MS = 10000;
-  const SNAPSHOT_MS = 20000;
+  const LIVE_FRAME_MS = 4000;
   const FOCUS_LOST_MS = 3000;
 
   const S = {
-    settings: { question_time_sec: 45, max_violations: 3, camera_mode: 'off' },
+    settings: { question_time_sec: 45, max_violations: 3, camera_mode: 'required' },
     classId: null,
     token: null,
     info: null,
@@ -65,38 +65,64 @@
   }
 
   // ─── RO'YXATDAN O'TISH ─────────────────────────────────────────────────────
+  // 1-qadam: faqat ism familiya
   function openRegister(classId) {
     S.classId = classId;
     $('reg-class').textContent = classId;
     $('reg-error').textContent = '';
-    const s = S.settings;
-    const rules = [
-      `Har bir savolga ${s.question_time_sec} soniya beriladi. Vaqt tugasa, savol javobsiz qoladi.`,
-      'Test boshlangach ilovadan, brauzerdan yoki boshqa oynaga chiqish taqiqlanadi.',
-      'Nusxalash, skrinshot, boshqa varaq ochish va ekranni bo\'lish taqiqlanadi.',
-      'Kitob, daftar, boshqa telefon va sun\'iy intellekt (ChatGPT va h.k.) dan foydalanish taqiqlanadi.',
-      s.max_violations > 0 ? `${s.max_violations} marta qoidabuzarlik qilinsa, test avtomatik to'xtatiladi.` : null,
-      s.camera_mode === 'required' ? 'Old kamera yoqiladi va test davomida surat olib turiladi.' : null,
-      'Testni faqat bir marta topshirish mumkin. Barcha harakatlaringiz o\'qituvchiga ko\'rinadi.'
-    ].filter(Boolean);
-    clear($('rules-list')).append(...rules.map(r => h('li', { text: r })));
-    $('cam-consent-row').hidden = s.camera_mode !== 'required';
     show('scr-register');
     $('reg-name').focus();
   }
 
-  async function onStart(e) {
+  function onContinue(e) {
     e.preventDefault();
     const name = $('reg-name').value.trim().replace(/\s+/g, ' ');
-    const team = $('reg-team').value.trim().replace(/\s+/g, ' ');
-    const err = $('reg-error');
-    const needCamera = S.settings.camera_mode === 'required';
-    if (name.length < 3) return (err.textContent = 'Ism familiyangizni to\'liq kiriting');
-    if (!$('reg-agree').checked) return (err.textContent = 'Qoidalarga rozilik bildiring');
-    if (needCamera && !$('reg-camera').checked) return (err.textContent = 'Kamera uchun rozilik bildiring');
-    err.textContent = '';
+    if (name.length < 3 || !/\p{L}{2,}/u.test(name)) {
+      $('reg-error').textContent = 'Ism familiyangizni to\'liq kiriting';
+      $('reg-name').focus();
+      return;
+    }
+    $('reg-error').textContent = '';
+    S.pendingName = name;
+    $('reg-name').blur(); // klaviatura yopilsin
+    openRules();
+  }
 
-    const btn = $('btn-start');
+  // 2-qadam: taqiqlar haqida ogohlantirish oynasi
+  function openRules() {
+    const s = S.settings;
+    const forbidden = [
+      'Ilovadan, brauzerdan yoki test oynasidan chiqish',
+      'Boshqa ilova, sayt yoki sun\'iy intellekt (ChatGPT, Google va h.k.) ochish',
+      'Kitob, daftar, boshqa telefon yoki birovning yordamidan foydalanish',
+      'Nusxalash, skrinshot olish, ekranni bo\'lish, boshqa varaq ochish'
+    ];
+    const info = [
+      `Har bir savolga ${s.question_time_sec} soniya beriladi — vaqt tugasa savol javobsiz qoladi`,
+      s.max_violations > 0 ? `${s.max_violations} marta qoidabuzarlik qilinsa, test avtomatik to'xtatiladi` : null,
+      'Testni faqat bir marta topshirish mumkin. Barcha harakatlaringiz o\'qituvchiga ko\'rinadi'
+    ].filter(Boolean);
+    clear($('rules-list')).append(...forbidden.map(r => h('li', { text: r })));
+    clear($('rules-info')).append(...info.map(r => h('li', { text: r })));
+    const needCamera = s.camera_mode === 'required';
+    clear($('btn-rules-ok')).append(needCamera ? 'Tushundim, roziman' : 'Roziman — testni boshlash');
+    $('modal-rules').hidden = false;
+  }
+
+  function onRulesOk() {
+    if (S.settings.camera_mode === 'required') {
+      $('modal-rules').hidden = true;
+      $('camera-error').textContent = '';
+      $('modal-camera').hidden = false;
+    } else {
+      startAttempt($('btn-rules-ok'), $('reg-error'));
+    }
+  }
+
+  // 3-qadam: kamera roziligi → test boshlanadi
+  async function startAttempt(btn, errEl) {
+    const needCamera = S.settings.camera_mode === 'required';
+    const label = btn.textContent;
     btn.disabled = true;
     btn.textContent = 'Tayyorlanmoqda...';
     enterFullscreen(); // foydalanuvchi bosishi ichida chaqirilishi shart
@@ -105,20 +131,23 @@
       if (needCamera) await startCamera();
       const res = await api('/api/attempt/start', {
         method: 'POST',
-        body: { class_id: S.classId, student_name: name, team_name: team, camera: !!S.stream }
+        body: { class_id: S.classId, student_name: S.pendingName, camera: !!S.stream }
       });
       S.token = res.token;
-      S.info = { name, team, classId: S.classId };
+      S.info = { name: S.pendingName, classId: S.classId };
       store.set(TOKEN_KEY, res.token);
       store.set(INFO_KEY, JSON.stringify(S.info));
+      $('modal-rules').hidden = true;
+      $('modal-camera').hidden = true;
       beginQuiz(res);
     } catch (e2) {
-      err.textContent = e2.message || 'Xatolik yuz berdi';
+      errEl.textContent = e2.message || 'Xatolik yuz berdi';
+      if (errEl === $('reg-error')) $('modal-rules').hidden = true;
       stopCamera();
       exitFullscreen();
     } finally {
       btn.disabled = false;
-      clear(btn).append(icon('play-fill'), ' Testni boshlash');
+      btn.textContent = label;
     }
   }
 
@@ -133,7 +162,8 @@
     clearInterval(S.timers.snap);
     S.timers.hb = setInterval(heartbeat, HEARTBEAT_MS);
     if (S.stream) {
-      S.timers.snap = setInterval(() => snapshot('interval'), SNAPSHOT_MS);
+      // Jonli kuzatuv kadri; server har 30 soniyada bittasini saqlaydi
+      S.timers.snap = setInterval(() => snapshot('live'), LIVE_FRAME_MS);
       setTimeout(() => snapshot('start'), 1500);
     }
     render(state);
@@ -157,12 +187,13 @@
       const box = clear($('q-options'));
       q.options.forEach((opt, i) => {
         const b = h('button', { class: 'option', type: 'button', role: 'radio', 'aria-checked': 'false',
-          'aria-label': `${String.fromCharCode(65 + i)}) ${opt}`, onclick: () => select(b, opt) },
+          'aria-label': `${String.fromCharCode(65 + i)}) ${opt}`, onclick: () => choose(b, opt) },
         h('span', { class: 'option-letter', text: String.fromCharCode(65 + i) }),
         h('span', { class: 'option-text', text: opt }));
         box.append(b);
       });
-      $('btn-answer').disabled = true;
+      $('quiz-body').scrollTop = 0;
+      $('quiz-body').classList.remove('leaving');
     }
     setBusy(false);
     clearInterval(S.timers.tick);
@@ -170,14 +201,17 @@
     tick();
   }
 
-  function select(btn, opt) {
+  // Bitta bosishda javob yuboriladi
+  function choose(btn, opt) {
     if (S.submitting) return;
     for (const b of $('q-options').children) {
       b.classList.toggle('selected', b === btn);
       b.setAttribute('aria-checked', String(b === btn));
     }
     S.selected = opt;
-    $('btn-answer').disabled = false;
+    btn.classList.add('sending');
+    $('quiz-body').classList.add('leaving');
+    submit(opt);
   }
 
   function tick() {
@@ -192,8 +226,11 @@
 
   function setBusy(busy) {
     S.submitting = busy;
-    $('btn-answer').disabled = busy || S.selected === null;
     for (const b of $('q-options').children) b.disabled = busy;
+    if (!busy) {
+      $('quiz-body').classList.remove('leaving');
+      for (const b of $('q-options').children) b.classList.remove('sending');
+    }
   }
 
   async function submit(answer) {
@@ -578,9 +615,12 @@
 
   // ─── ISHGA TUSHIRISH ───────────────────────────────────────────────────────
   function bindEvents() {
-    $('reg-form').addEventListener('submit', onStart);
+    $('reg-form').addEventListener('submit', onContinue);
     $('btn-back').addEventListener('click', () => show('scr-classes'));
-    $('btn-answer').addEventListener('click', () => { if (S.selected !== null) submit(S.selected); });
+    $('btn-rules-ok').addEventListener('click', onRulesOk);
+    $('btn-rules-back').addEventListener('click', () => { $('modal-rules').hidden = true; });
+    $('btn-camera-ok').addEventListener('click', () => startAttempt($('btn-camera-ok'), $('camera-error')));
+    $('btn-camera-back').addEventListener('click', () => { $('modal-camera').hidden = true; });
     $('btn-warn-ok').addEventListener('click', () => {
       $('overlay-warning').hidden = true;
       if (S.active) enterFullscreen();

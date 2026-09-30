@@ -45,7 +45,8 @@
         </header>
 
         <nav class="nav" id="nav" aria-label="Bo'limlar">
-            <button class="nav-item active" data-tab="results" type="button"><i class="ri-line-chart-line"></i><span>Natijalar</span></button>
+            <button class="nav-item active" data-tab="live" type="button"><i class="ri-live-line"></i><span>Kuzatuv</span></button>
+            <button class="nav-item" data-tab="results" type="button"><i class="ri-line-chart-line"></i><span>Natijalar</span></button>
             <button class="nav-item" data-tab="tests" type="button"><i class="ri-question-answer-line"></i><span>Savollar</span></button>
             <button class="nav-item" data-tab="classes" type="button"><i class="ri-team-line"></i><span>Sinflar</span></button>
             <button class="nav-item" data-tab="settings" type="button"><i class="ri-settings-3-line"></i><span>Sozlamalar</span></button>
@@ -53,8 +54,18 @@
 
         <main class="app-main">
 
+            <!-- JONLI KUZATUV -->
+            <section id="tab-live" class="tab">
+                <div class="tab-head">
+                    <h1>Jonli kuzatuv</h1>
+                    <span class="live" id="live-dot2" title="Har 4 soniyada yangilanadi"><span></span> Jonli</span>
+                </div>
+                <p class="muted small">Hozir test yechayotgan o'quvchilar. Kamera kadri har 4 soniyada yangilanadi. Qizil ramka — yaqinda qoidabuzarlik bo'lgan. Batafsil ko'rish yoki testni to'xtatish uchun o'quvchini bosing.</p>
+                <div class="live-grid" id="live-grid"></div>
+            </section>
+
             <!-- NATIJALAR -->
-            <section id="tab-results" class="tab">
+            <section id="tab-results" class="tab" hidden>
                 <div class="tab-head">
                     <h1>Natijalar va nazorat</h1>
                     <span class="live" id="live-dot" title="Har 10 soniyada yangilanadi"><span></span> Jonli</span>

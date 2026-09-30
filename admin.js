@@ -3,11 +3,13 @@
 (() => {
   const TOKEN_KEY = 'sp_admin';
   const REFRESH_MS = 10000;
+  const LIVE_REFRESH_MS = 4000;
 
   const A = {
     token: null,
     username: '',
-    tab: 'results',
+    tab: 'live',
+    liveTiles: new Map(),
     classes: [],
     attempts: [],
     tests: [],
@@ -125,6 +127,10 @@
     for (const b of document.querySelectorAll('.nav-item')) b.classList.toggle('active', b.dataset.tab === tab);
     for (const s of document.querySelectorAll('.tab')) s.hidden = s.id !== 'tab-' + tab;
     clearInterval(A.refreshTimer);
+    if (tab === 'live') {
+      loadLive();
+      A.refreshTimer = setInterval(() => { if (!document.hidden && !A.detailOpen) loadLive(); }, LIVE_REFRESH_MS);
+    }
     if (tab === 'results') {
       loadAttempts();
       A.refreshTimer = setInterval(() => { if (!document.hidden && !A.detailOpen) loadAttempts(true); }, REFRESH_MS);
@@ -133,6 +139,78 @@
     if (tab === 'classes') renderClasses();
     if (tab === 'settings') loadSettings();
     window.scrollTo(0, 0);
+  }
+
+  // ─── JONLI KUZATUV ─────────────────────────────────────────────────────────
+  async function loadLive() {
+    const grid = $('live-grid');
+    let rows;
+    try {
+      rows = await aapi('/api/admin/live');
+      $('live-dot2').classList.remove('off');
+    } catch (err) {
+      $('live-dot2').classList.add('off');
+      if (!A.liveTiles.size) clear(grid).append(h('p', { class: 'empty error', text: err.message }));
+      return;
+    }
+
+    const seen = new Set(rows.map(r => r.id));
+    for (const [id, tile] of A.liveTiles) {
+      if (!seen.has(id)) {
+        if (tile.url) URL.revokeObjectURL(tile.url);
+        tile.el.remove();
+        A.liveTiles.delete(id);
+      }
+    }
+    const empty = grid.querySelector('.empty');
+    if (empty) empty.remove();
+    if (!rows.length) {
+      grid.append(h('p', { class: 'empty', text: 'Hozir hech kim test yechmayapti' }));
+      return;
+    }
+
+    for (const r of rows) {
+      let tile = A.liveTiles.get(r.id);
+      if (!tile) {
+        const img = h('img', { alt: '' });
+        const cam = h('div', { class: 'live-cam' }, img, h('span', { class: 'live-nocam' }, icon('camera-off-line'), ' Kadr yo\'q'));
+        const info = h('div', { class: 'live-info' });
+        const el = h('button', { class: 'live-tile', type: 'button', onclick: () => openAttempt(r.id) }, cam, info);
+        tile = { el, img, cam, info, frameAt: null, url: null };
+        A.liveTiles.set(r.id, tile);
+        grid.append(el);
+      }
+      const recentViolation = r.last_violation_at && Date.now() - new Date(r.last_violation_at) < 30000;
+      tile.el.classList.toggle('alert', !!recentViolation);
+      tile.el.classList.toggle('warned', r.violations > 0);
+      // h() orqali: null bolalar tashlab yuboriladi (append'ning o'zi "null" deb yozib qo'yadi)
+      const info = h('div', { class: 'live-info' },
+        h('b', { text: r.student_name }),
+        h('div', { class: 'live-meta' },
+          h('span', { class: 'chip', text: r.class_id }),
+          h('span', { text: `${Math.min(r.current_index + 1, r.question_count || 0)}/${r.question_count || 0}` }),
+          r.violations > 0 ? h('span', { class: 'badge risk-high' }, icon('alarm-warning-line'), ` ${r.violations}`) : null),
+        recentViolation && r.last_violation_type
+          ? h('small', { class: 'live-warn', text: EVENTS[r.last_violation_type] || r.last_violation_type })
+          : null);
+      tile.info.replaceWith(info);
+      tile.info = info;
+
+      const frameAt = r.frame_at || null;
+      tile.cam.classList.toggle('has-frame', !!frameAt);
+      if (frameAt && frameAt !== tile.frameAt) {
+        tile.frameAt = frameAt;
+        aapi(`/api/admin/live/${r.id}/frame`, { raw: true })
+          .then(res => res.blob())
+          .then(b => {
+            const old = tile.url;
+            tile.url = URL.createObjectURL(b);
+            tile.img.src = tile.url;
+            if (old) URL.revokeObjectURL(old);
+          })
+          .catch(() => {});
+      }
+    }
   }
 
   // ─── SINFLAR ───────────────────────────────────────────────────────────────

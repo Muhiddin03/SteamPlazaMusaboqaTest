@@ -28,44 +28,31 @@
             <button class="back-link" id="btn-back" type="button"><i class="ri-arrow-left-line"></i> Orqaga</button>
             <div class="card">
                 <span class="chip chip-primary" id="reg-class"></span>
-                <h2>Ma'lumotlaringiz</h2>
+                <h2>Ism familiyangizni yozing</h2>
                 <form id="reg-form" novalidate>
                     <label class="field">
                         <span>Ism familiya</span>
-                        <input id="reg-name" autocomplete="name" maxlength="100" placeholder="Masalan: Aliyev Ali">
+                        <input id="reg-name" autocomplete="name" maxlength="100" placeholder="Masalan: Aliyev Ali" enterkeyhint="go">
                     </label>
-                    <label class="field">
-                        <span>Jamoa nomi <small class="muted">(ixtiyoriy)</small></span>
-                        <input id="reg-team" autocomplete="off" maxlength="100" placeholder="Jamoa nomi">
-                    </label>
-
-                    <div class="rules">
-                        <h3><i class="ri-shield-check-line"></i> Test qoidalari</h3>
-                        <ul id="rules-list"></ul>
-                    </div>
-
-                    <label class="check"><input type="checkbox" id="reg-agree"> <span>Qoidalar bilan tanishdim va ularga roziman</span></label>
-                    <label class="check" id="cam-consent-row" hidden><input type="checkbox" id="reg-camera"> <span>Test davomida kamera orqali kuzatilishiga roziman</span></label>
-
                     <p class="form-error" id="reg-error" role="alert"></p>
-                    <button class="btn btn-primary btn-block btn-lg" id="btn-start" type="submit"><i class="ri-play-fill"></i> Testni boshlash</button>
+                    <button class="btn btn-primary btn-block btn-lg" id="btn-continue" type="submit">Davom etish <i class="ri-arrow-right-line"></i></button>
                 </form>
             </div>
         </section>
 
         <section id="scr-quiz" class="screen quiz" hidden>
             <div class="quiz-head">
-                <div class="quiz-pill"><i class="ri-file-list-3-line"></i> <b id="q-num">1</b>/<span id="q-total">1</span></div>
+                <video id="cam-preview" class="cam-preview" playsinline muted hidden></video>
+                <div class="quiz-pill"><b id="q-num">1</b>/<span id="q-total">1</span></div>
                 <div class="quiz-pill quiz-timer" id="q-timer"><i class="ri-timer-line"></i> <b id="q-time">0:00</b></div>
                 <div class="quiz-pill quiz-viol" id="q-viol" title="Qoidabuzarliklar"><i class="ri-alarm-warning-line"></i> <b id="q-viol-n">0</b></div>
             </div>
             <div class="timebar"><div id="q-timebar"></div></div>
-            <div class="card quiz-card">
+            <div class="quiz-body" id="quiz-body">
                 <div class="q-text" id="q-text"></div>
                 <div class="options" id="q-options" role="radiogroup" aria-labelledby="q-text"></div>
-                <button class="btn btn-primary btn-block btn-lg" id="btn-answer" type="button" disabled>Javobni tasdiqlash <i class="ri-arrow-right-line"></i></button>
             </div>
-            <p class="quiz-note"><i class="ri-eye-line"></i> Test nazorat ostida. Ilova yoki oynadan chiqmang.</p>
+            <p class="quiz-note"><i class="ri-eye-line"></i> Javobni bosing — keyingi savol darhol chiqadi</p>
         </section>
 
         <section id="scr-result" class="screen" hidden>
@@ -75,7 +62,38 @@
     </main>
 
     <div id="watermark" class="watermark" hidden aria-hidden="true"></div>
-    <video id="cam-preview" class="cam-preview" playsinline muted hidden></video>
+
+    <div id="modal-rules" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="rules-title">
+        <div class="overlay-box sheet">
+            <i class="ri-shield-check-fill overlay-icon"></i>
+            <h2 id="rules-title">Diqqat! Test qoidalari</h2>
+            <p class="muted">Test boshlangach quyidagilar <b>taqiqlanadi</b>:</p>
+            <ul class="rules-list" id="rules-list"></ul>
+            <ul class="rules-list info" id="rules-info"></ul>
+            <div class="sheet-actions">
+                <button class="btn btn-primary btn-block btn-lg" id="btn-rules-ok" type="button">Tushundim, roziman</button>
+                <button class="btn btn-ghost btn-block" id="btn-rules-back" type="button">Orqaga</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-camera" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="camera-title">
+        <div class="overlay-box sheet">
+            <i class="ri-camera-lens-fill overlay-icon"></i>
+            <h2 id="camera-title">Kamera orqali kuzatuv</h2>
+            <p>Test davomida <b>old kamerangiz yoqiladi</b> va o'qituvchi sizni jonli kuzatib turadi. Qoidabuzarlik bo'lganda surat saqlanadi.</p>
+            <ul class="rules-list ok">
+                <li>Yuzingiz kamerada ko'rinib tursin</li>
+                <li>Yorug' joyda o'tiring</li>
+                <li>Brauzer so'rasa — <b>"Ruxsat berish"</b> ni bosing</li>
+            </ul>
+            <p class="form-error" id="camera-error" role="alert"></p>
+            <div class="sheet-actions">
+                <button class="btn btn-primary btn-block btn-lg" id="btn-camera-ok" type="button"><i class="ri-camera-line"></i> Roziman — testni boshlash</button>
+                <button class="btn btn-ghost btn-block" id="btn-camera-back" type="button">Orqaga</button>
+            </div>
+        </div>
+    </div>
 
     <div id="overlay-warning" class="overlay" hidden>
         <div class="overlay-box warn">

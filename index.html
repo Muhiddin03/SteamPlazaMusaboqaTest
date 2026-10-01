@@ -78,32 +78,22 @@
 
     <div id="modal-rules" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="rules-title">
         <div class="overlay-box sheet">
-            <i class="ri-shield-check-fill overlay-icon"></i>
-            <h2 id="rules-title">Diqqat! Test qoidalari</h2>
-            <p class="muted">Test boshlangach quyidagilar <b>taqiqlanadi</b>:</p>
+            <h2 id="rules-title" class="rules-title"><i class="ri-shield-check-fill"></i> Test qoidalari</h2>
+            <div class="rules-time" id="rules-time"></div>
+            <h3 class="rules-h">Taqiqlanadi</h3>
             <ul class="rules-list" id="rules-list"></ul>
             <ul class="rules-list info" id="rules-info"></ul>
-            <div class="sheet-actions">
-                <button class="btn btn-primary btn-block btn-lg" id="btn-rules-ok" type="button">Tushundim, roziman</button>
-                <button class="btn btn-ghost btn-block" id="btn-rules-back" type="button">Orqaga</button>
+            <div class="camera-note" id="camera-note" hidden>
+                <i class="ri-camera-lens-fill"></i>
+                <div>
+                    <b>Kamera yoqiladi</b>
+                    <p>O'qituvchi sizni <b>istalgan paytda jonli ko'radi</b>. Tizim ham yuzingizni avtomatik kuzatadi: kameradan chiqish, boshni burish, yoningizda boshqa odam — qayd etiladi va surati saqlanadi.</p>
+                </div>
             </div>
-        </div>
-    </div>
-
-    <div id="modal-camera" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="camera-title">
-        <div class="overlay-box sheet">
-            <i class="ri-camera-lens-fill overlay-icon"></i>
-            <h2 id="camera-title">Kamera orqali kuzatuv</h2>
-            <p>Test davomida <b>old kamerangiz yoqiladi</b> va o'qituvchi sizni jonli kuzatib turadi. Qoidabuzarlik bo'lganda surat saqlanadi.</p>
-            <ul class="rules-list ok">
-                <li>Yuzingiz kamerada ko'rinib tursin</li>
-                <li>Yorug' joyda o'tiring</li>
-                <li>Brauzer so'rasa — <b>"Ruxsat berish"</b> ni bosing</li>
-            </ul>
-            <p class="form-error" id="camera-error" role="alert"></p>
+            <p class="form-error" id="rules-error" role="alert"></p>
             <div class="sheet-actions">
-                <button class="btn btn-primary btn-block btn-lg" id="btn-camera-ok" type="button"><i class="ri-camera-line"></i> Roziman — testni boshlash</button>
-                <button class="btn btn-ghost btn-block" id="btn-camera-back" type="button">Orqaga</button>
+                <button class="btn btn-primary btn-block btn-lg" id="btn-rules-ok" type="button">Roziman — testni boshlash</button>
+                <button class="btn btn-ghost btn-block" id="btn-rules-back" type="button">Orqaga</button>
             </div>
         </div>
     </div>

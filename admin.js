@@ -56,7 +56,9 @@
     face_missing: 'Kameradan chiqib ketdi (yuz ko\'rinmadi)',
     multiple_faces: 'Kamerada boshqa odam bor',
     head_turned: 'Boshini yon tomonga burdi',
+    head_turned_long: 'Uzoq vaqt boshqa tomonga qaradi',
     looking_down: 'Pastga qaradi (kitob/telefon?)',
+    looking_down_long: 'Uzoq vaqt pastga qaradi',
     motion: 'Ortiqcha harakat',
     ai_unavailable: 'Yuzni aniqlash ishlamadi',
     auto_terminated: 'Test avtomatik to\'xtatildi',
@@ -161,6 +163,7 @@
       if (!A.liveTiles.size) clear(grid).append(h('p', { class: 'empty error', text: err.message }));
       return;
     }
+    processAlerts(rows);
 
     const seen = new Set(rows.map(r => r.id));
     for (const [id, tile] of A.liveTiles) {
@@ -193,13 +196,6 @@
       const recentAlert = alert && Date.now() - new Date(alert.at) < 30000;
       tile.el.classList.toggle('alert', !!recentAlert);
       tile.el.classList.toggle('warned', r.violations > 0 || r.alert_count > 0);
-      // Yangi xavf signali — ovoz va bildirishnoma
-      if (alert && alert.id !== tile.lastAlertId) {
-        if (tile.lastAlertId !== null || recentAlert) notifyAlert(r, alert);
-        tile.lastAlertId = alert.id;
-      } else if (!alert && tile.lastAlertId === null) {
-        tile.lastAlertId = 0;
-      }
       // h() orqali: null bolalar tashlab yuboriladi (append'ning o'zi "null" deb yozib qo'yadi)
       const info = h('div', { class: 'live-info' },
         h('b', { text: r.student_name }),
@@ -230,29 +226,75 @@
     }
   }
 
-  // Xavf signali: ovoz + ekranda bildirishnoma
+  // ─── Xavf signallari (har qaysi bo'limda ishlaydi) ───
+  // attempt_id -> oxirgi ko'rilgan signal id
+  const seenAlerts = new Map();
+
+  function processAlerts(rows) {
+    for (const r of rows) {
+      const alert = r.last_alert;
+      const prev = seenAlerts.get(r.id);
+      if (alert && alert.id !== prev) {
+        // Sahifa ochilganda eski signallar uchun ovoz chiqmasin — faqat yangilari
+        const fresh = Date.now() - new Date(alert.at) < 15000;
+        if (prev !== undefined || fresh) notifyAlert(r, alert);
+        seenAlerts.set(r.id, alert.id);
+      } else if (!alert && prev === undefined) {
+        seenAlerts.set(r.id, 0);
+      }
+    }
+  }
+
+  // Kuzatuv bo'limi ochiq bo'lmasa ham signallar kelsin
+  async function pollAlerts() {
+    if (!A.token || A.tab === 'live') return;
+    try { processAlerts(await aapi('/api/admin/live')); } catch { /* keyingi safar */ }
+  }
+
+  // Brauzerlar ovozni sahifada birinchi bosishgacha bloklaydi — birinchi bosishda ochamiz
   let audioCtx = null;
-  function beep() {
+  function unlockAudio() {
     try {
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      const t = audioCtx.currentTime;
-      for (const [start, freq] of [[0, 880], [0.18, 660]]) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch { /* ovoz qo'llanmaydi */ }
+  }
+
+  function beep() {
+    try {
+      unlockAudio();
+      if (!audioCtx) return;
+      const t = audioCtx.currentTime + 0.02;
+      for (const [start, freq] of [[0, 880], [0.2, 660], [0.4, 880]]) {
         const o = audioCtx.createOscillator();
         const g = audioCtx.createGain();
+        o.type = 'square';
         o.frequency.value = freq;
         o.connect(g);
         g.connect(audioCtx.destination);
-        g.gain.setValueAtTime(0.18, t + start);
-        g.gain.exponentialRampToValueAtTime(0.001, t + start + 0.16);
+        g.gain.setValueAtTime(0.0001, t + start);
+        g.gain.exponentialRampToValueAtTime(0.25, t + start + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + start + 0.18);
         o.start(t + start);
-        o.stop(t + start + 0.17);
+        o.stop(t + start + 0.19);
       }
     } catch { /* ovoz qo'llanmasa — faqat bildirishnoma */ }
   }
 
+  let titleTimer = null;
   function notifyAlert(r, alert) {
+    const text = `${r.student_name}: ${EVENTS[alert.type] || alert.type}`;
     if ($('live-sound').checked) beep();
-    toast(`${r.student_name}: ${EVENTS[alert.type] || alert.type}`, 'error', 6000);
+    toast(text, 'error', 7000);
+    // Admin boshqa varaqda bo'lsa — sarlavha miltillaydi
+    if (document.hidden) {
+      clearInterval(titleTimer);
+      const base = 'Steam Plaza | Admin';
+      let on = false;
+      titleTimer = setInterval(() => { document.title = (on = !on) ? `⚠ ${text}` : base; }, 1000);
+      const stop = () => { clearInterval(titleTimer); document.title = base; document.removeEventListener('visibilitychange', stop); };
+      document.addEventListener('visibilitychange', stop);
+    }
   }
 
   // ─── Kamera nazoratini yoqish/o'chirish ───
@@ -373,7 +415,7 @@
     })();
   }
 
-  const ALERT_UI = new Set(['face_missing', 'multiple_faces', 'head_turned', 'looking_down', 'motion']);
+  const ALERT_UI = new Set(['face_missing', 'multiple_faces', 'head_turned', 'head_turned_long', 'looking_down', 'looking_down_long', 'motion']);
 
   // ─── SINFLAR ───────────────────────────────────────────────────────────────
   async function loadClasses() {
@@ -881,7 +923,7 @@
 
     const info = h('div', { class: 'kv' },
       kv('Sinf', d.class_id),
-      kv('Jamoa', d.team_name),
+      d.team_name && d.team_name !== '-' ? kv('Jamoa', d.team_name) : null,
       kv('Holat', h('span', { class: 'badge ' + st.cls, text: st.label })),
       kv('Ball', `${d.score} / ${d.total}`),
       kv('Nazorat', h('span', { class: 'badge ' + risk.cls }, icon(risk.icon), ' ', risk.label)),
@@ -973,8 +1015,10 @@
     return h('div', { class: 'kv-row' }, h('span', { text: k }), v instanceof Node ? v : h('b', { text: v ?? '—' }));
   }
 
+  // Surat qaysi holatda olingani: test boshida yoki aniq qoidabuzarlik paytida
   function snapReason(r) {
-    return { start: 'boshida', interval: 'davriy', violation: 'qoidabuzarlikda', return: 'qaytganda' }[r] || r || '';
+    const base = { start: 'test boshida', interval: 'davriy', violation: 'qoidabuzarlikdan qaytganda', return: 'qaytganda' }[r];
+    return base || EVENTS[r] || r || '';
   }
 
   function shortUA(ua) {
@@ -1159,6 +1203,9 @@
       store.set('sp_sound', $('live-sound').checked ? 'on' : 'off');
       if ($('live-sound').checked) beep();
     });
+    $('btn-sound-test').addEventListener('click', e => { e.preventDefault(); beep(); toast('Signal shunday eshitiladi', 'info', 2500); });
+    document.addEventListener('pointerdown', unlockAudio);
+    setInterval(pollAlerts, 5000);
     $('sel-all').addEventListener('change', onSelectAll);
     $('btn-bulk-del').addEventListener('click', onBulkDelete);
     $('btn-sheets').addEventListener('click', () => downloadStudentPdf(targetAttempts().map(a => a.id), false, $('btn-sheets')));

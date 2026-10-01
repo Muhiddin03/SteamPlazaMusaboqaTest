@@ -31,16 +31,20 @@
     face: null,
     faceSince: {},
     faceReported: {},
+    faceEvidence: {},
     timers: {}
   };
 
-  // Kamera orqali aniqlanadigan holatlar: [turi, banner ko'rsatish (ms), xabar yuborish (ms), matn]
+  // Kamera orqali aniqlanadigan holatlar (ms):
+  //   show    — o'quvchi ekranida qizil ogohlantirish
+  //   report  — o'qituvchiga yuboriladi (face_missing/multiple_faces — darhol qoidabuzarlik)
+  //   violate — shuncha davom etsa qoidabuzarlik sanaladi (<turi>_long)
   const FACE_RULES = [
-    ['face_missing', 800, 5000, 'Yuzingiz kamerada ko\'rinmayapti! Kameraga qarang.'],
-    ['multiple_faces', 500, 3000, 'Kamerada boshqa odam bor! Yolg\'iz ishlang.'],
-    ['head_turned', 1200, 3000, 'Boshingizni burmang — ekranga qarang!'],
-    ['looking_down', 1200, 3000, 'Pastga qaramang — ekranga qarang!'],
-    ['motion', 800, 2500, 'Ortiqcha harakat qilmang!']
+    { type: 'face_missing', show: 800, report: 5000, text: 'Yuzingiz kamerada ko\'rinmayapti! Kameraga qarang.' },
+    { type: 'multiple_faces', show: 500, report: 3000, text: 'Kamerada boshqa odam bor! Yolg\'iz ishlang.' },
+    { type: 'head_turned', show: 1200, report: 3000, violate: 8000, text: 'Boshingizni burmang — ekranga qarang!' },
+    { type: 'looking_down', show: 1200, report: 3000, violate: 8000, text: 'Pastga qaramang — ekranga qarang!' },
+    { type: 'motion', show: 800, report: 2500, text: 'Ortiqcha harakat qilmang!' }
   ];
 
   // ─── EKRANLAR ──────────────────────────────────────────────────────────────
@@ -100,30 +104,30 @@
     openRules();
   }
 
-  // 2-qadam: taqiqlar haqida ogohlantirish oynasi
-  function openRules() {
+  // 2-qadam: qisqa qoidalar + kamera roziligi bitta oynada
+  async function openRules() {
+    await loadSettings(); // admin hozirgina o'zgartirgan vaqt/kamera sozlamasi ko'rinsin
     const s = S.settings;
+    $('rules-time').textContent = `⏱ Har bir savolga ${s.question_time_sec} soniya`;
     const forbidden = [
-      'Ilovadan, brauzerdan yoki test oynasidan chiqish',
-      'Boshqa ilova, sayt yoki sun\'iy intellekt (ChatGPT, Google va h.k.) ochish',
-      s.allow_paper
-        ? 'Kitob, boshqa telefon yoki birovning yordamidan foydalanish'
-        : 'Kitob, daftar, boshqa telefon yoki birovning yordamidan foydalanish',
-      'Nusxalash, skrinshot olish, ekranni bo\'lish, boshqa varaq ochish'
+      'Testdan yoki ilovadan chiqish',
+      'Boshqa sayt, ChatGPT, telefon, kitob',
+      'Yoningizda boshqa odam bo\'lishi',
+      'Nusxalash va skrinshot'
     ];
     const info = [
-      s.allow_paper
-        ? 'Qog\'ozda misol ishlashga ruxsat bor. Ekrandagi ✏️ qoralamadan ham foydalanishingiz mumkin'
-        : 'Misol ishlash uchun ekrandagi ✏️ qoralamadan foydalaning',
-      `Har bir savolga ${s.question_time_sec} soniya beriladi — vaqt tugasa savol javobsiz qoladi`,
-      s.max_violations > 0 ? `${s.max_violations} marta qoidabuzarlik qilinsa, test avtomatik to'xtatiladi` : null,
-      'Testni faqat bir marta topshirish mumkin. Barcha harakatlaringiz o\'qituvchiga ko\'rinadi'
+      s.allow_paper ? 'Qog\'ozda misol ishlash mumkin. Ekranda ✏️ qoralama ham bor' : 'Misol ishlash uchun ekranda ✏️ qoralama bor',
+      s.max_violations > 0 ? `${s.max_violations} ta qoidabuzarlikda test avtomatik to'xtaydi` : null,
+      'Test faqat bir marta topshiriladi'
     ].filter(Boolean);
     clear($('rules-list')).append(...forbidden.map(r => h('li', { text: r })));
     clear($('rules-info')).append(...info.map(r => h('li', { text: r })));
     const needCamera = s.camera_mode === 'required';
-    clear($('btn-rules-ok')).append(needCamera ? 'Tushundim, roziman' : 'Roziman — testni boshlash');
+    $('camera-note').hidden = !needCamera;
+    $('rules-error').textContent = '';
+    clear($('btn-rules-ok')).append(icon(needCamera ? 'camera-line' : 'play-fill'), ' Roziman — testni boshlash');
     $('modal-rules').hidden = false;
+    if (needCamera) preloadFace();
   }
 
   function preloadFace() {
@@ -131,22 +135,15 @@
   }
 
   function onRulesOk() {
-    if (S.settings.camera_mode === 'required') {
-      preloadFace();
-      $('modal-rules').hidden = true;
-      $('camera-error').textContent = '';
-      $('modal-camera').hidden = false;
-    } else {
-      startAttempt($('btn-rules-ok'), $('reg-error'));
-    }
+    startAttempt($('btn-rules-ok'), $('rules-error'));
   }
 
-  // 3-qadam: kamera roziligi → test boshlanadi
+  // 3-qadam: rozilik → kamera yoqiladi → test boshlanadi
   async function startAttempt(btn, errEl) {
     const needCamera = S.settings.camera_mode === 'required';
-    const label = btn.textContent;
+    const label = btn.innerHTML;
     btn.disabled = true;
-    btn.textContent = 'Tayyorlanmoqda...';
+    btn.textContent = needCamera ? 'Kamera yoqilmoqda...' : 'Tayyorlanmoqda...';
     enterFullscreen(); // foydalanuvchi bosishi ichida chaqirilishi shart
 
     try {
@@ -160,16 +157,14 @@
       store.set(TOKEN_KEY, res.token);
       store.set(INFO_KEY, JSON.stringify(S.info));
       $('modal-rules').hidden = true;
-      $('modal-camera').hidden = true;
       beginQuiz(res);
     } catch (e2) {
       errEl.textContent = e2.message || 'Xatolik yuz berdi';
-      if (errEl === $('reg-error')) $('modal-rules').hidden = true;
       stopCamera();
       exitFullscreen();
     } finally {
       btn.disabled = false;
-      btn.textContent = label;
+      btn.innerHTML = label;
     }
   }
 
@@ -595,23 +590,32 @@
     v.hidden = true;
   }
 
-  // Kadr yuboradi; server keyingi kadr qachon kerakligini aytadi (admin kuzatsa — har soniyada)
-  async function snapshot(reason) {
-    if (!S.stream || !S.active) return null;
+  // Kameradan hozirgi kadrni oladi (JPEG data URL)
+  function captureFrame(live) {
     const v = $('cam-preview');
-    if (!v.videoWidth) return null;
-    const w = reason === 'live' ? 240 : 320;
+    if (!S.stream || !v.videoWidth) return null;
+    const w = live ? 240 : 320;
     const hgt = Math.round((v.videoHeight * w) / v.videoWidth);
     const c = document.createElement('canvas');
     c.width = w;
     c.height = hgt;
     c.getContext('2d').drawImage(v, 0, 0, w, hgt);
-    const image = c.toDataURL('image/jpeg', reason === 'live' ? 0.5 : 0.6);
+    return c.toDataURL('image/jpeg', live ? 0.5 : 0.65);
+  }
+
+  async function sendFrame(image, reason) {
+    if (!image || !S.active) return null;
     try {
       return await api('/api/attempt/snapshot', { method: 'POST', attempt: S.token, body: { image, reason } });
     } catch {
       return null;
     }
+  }
+
+  // reason: 'live' — jonli kuzatuv (bazaga yozilmaydi), boshqasi — dalil sifatida saqlanadi.
+  // Server keyingi jonli kadr qachon kerakligini aytadi (admin kuzatsa — har soniyada)
+  function snapshot(reason) {
+    return sendFrame(captureFrame(reason === 'live'), reason);
   }
 
   function scheduleFrame(ms) {
@@ -707,40 +711,64 @@
     $('draft-clear').addEventListener('click', clearDraft);
   }
 
-  // Qog'ozda ishlashga ruxsat bo'lsa: pastga qarash va qo'l harakati xavf emas,
-  // yuz qisqa vaqt ko'rinmasligi ham (qog'ozga egilganda) kechiriladi
+  // Qoralama ochiq bo'lsa — o'quvchi ekranning pastiga yozmoqda: bosh holati tekshirilmaydi.
+  // Qog'ozda ishlashga ruxsat bo'lsa — pastga qarash va harakat kechiriladi, faqat kuchli burilish hisoblanadi.
   function faceRules() {
+    const posture = ['head_turned', 'looking_down', 'motion'];
+    if (!$('draft').hidden) return FACE_RULES.filter(r => !posture.includes(r.type));
     if (!S.settings.allow_paper) return FACE_RULES;
     return FACE_RULES
-      .filter(([type]) => type !== 'looking_down' && type !== 'motion')
-      .map(r => (r[0] === 'face_missing' ? [r[0], 4000, 12000, r[3]] : r));
+      .filter(r => r.type !== 'looking_down' && r.type !== 'motion')
+      .map(r => {
+        if (r.type === 'face_missing') return { ...r, show: 4000, report: 12000 };
+        if (r.type === 'head_turned') return { ...r, show: 3000, report: 5000, violate: 15000, strong: true };
+        return r;
+      });
   }
 
   function onFaceSample(s) {
     if (!S.active) return;
     const now = Date.now();
+    const rules = faceRules();
+    const strong = rules.some(r => r.strong);
     const active = {
       face_missing: s.faces === 0,
       multiple_faces: s.faces >= 2,
-      head_turned: s.faces === 1 && s.turned,
+      head_turned: s.faces === 1 && (strong ? s.strongTurn : s.turned),
       looking_down: s.faces === 1 && s.down,
       motion: s.motion
     };
+    const live = new Set(rules.map(r => r.type));
     let banner = null;
-    for (const [type, showAfter, reportAfter, text] of faceRules()) {
-      if (!active[type]) {
+    for (const type of Object.keys(active)) {
+      if (!active[type] || !live.has(type)) {
         delete S.faceSince[type];
         delete S.faceReported[type];
-        continue;
+        delete S.faceEvidence[type];
       }
-      const since = S.faceSince[type] || (S.faceSince[type] = now);
+    }
+    for (const r of rules) {
+      if (!active[r.type]) continue;
+      const since = S.faceSince[r.type] || (S.faceSince[r.type] = now);
       const dur = now - since;
-      if (dur >= showAfter && !banner) banner = text;
-      if (dur >= reportAfter && !S.faceReported[type]) {
-        S.faceReported[type] = true;
-        report(type, `${(dur / 1000).toFixed(1)} soniya`);
-        snapshot('violation');
+      const secs = `${(dur / 1000).toFixed(1)} soniya`;
+      if (dur >= r.show) {
+        if (!banner) banner = r.text;
+        // Dalil surati — holat endigina aniqlangan paytdagi kadr (o'quvchi hali burilgan/chiqqan holda)
+        if (!S.faceEvidence[r.type]) S.faceEvidence[r.type] = captureFrame(false);
+      }
+      const done = S.faceReported[r.type] || (S.faceReported[r.type] = {});
+      if (dur >= r.report && !done.report) {
+        done.report = true;
+        report(r.type, secs);
+        sendFrame(S.faceEvidence[r.type] || captureFrame(false), r.type);
         if (navigator.vibrate) navigator.vibrate(200);
+      }
+      if (r.violate && dur >= r.violate && !done.violate) {
+        done.violate = true;
+        report(r.type + '_long', secs);
+        sendFrame(captureFrame(false), r.type + '_long');
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
       }
     }
     const el = $('face-banner');
@@ -785,8 +813,6 @@
     $('btn-back').addEventListener('click', () => show('scr-classes'));
     $('btn-rules-ok').addEventListener('click', onRulesOk);
     $('btn-rules-back').addEventListener('click', () => { $('modal-rules').hidden = true; });
-    $('btn-camera-ok').addEventListener('click', () => startAttempt($('btn-camera-ok'), $('camera-error')));
-    $('btn-camera-back').addEventListener('click', () => { $('modal-camera').hidden = true; });
     $('btn-warn-ok').addEventListener('click', () => {
       $('overlay-warning').hidden = true;
       if (S.active) enterFullscreen();

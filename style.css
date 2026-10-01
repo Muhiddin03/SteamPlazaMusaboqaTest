@@ -352,6 +352,22 @@ body.quiz-active .topbar-btn { display: none; }
 .rules-list.info li { background: var(--info-soft); color: #1e3a8a; font-weight: 500; }
 .rules-list.info li::before { content: "i"; color: var(--info); font-style: italic; font-family: Georgia, serif; }
 .sheet-actions { display: grid; gap: 8px; }
+.rules-title { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+.rules-title i { color: var(--primary); font-size: 28px; }
+.rules-time {
+    display: inline-block; margin-bottom: 12px; padding: 6px 14px; border-radius: 999px;
+    background: var(--dark); color: #fff; font-weight: 800; font-size: 15px;
+}
+.rules-h { text-align: left; font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--danger); margin: 0 0 6px; }
+.rules-list li { padding-top: 8px; padding-bottom: 8px; font-size: 14.5px; }
+.rules-list li::before { top: 8px; }
+.rules-list { margin-bottom: 10px; gap: 6px; }
+.camera-note {
+    display: flex; gap: 10px; text-align: left; margin-bottom: 12px; padding: 12px;
+    border-radius: 12px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46;
+}
+.camera-note i { font-size: 26px; color: var(--primary-hover); flex-shrink: 0; }
+.camera-note p { margin: 2px 0 0; font-size: 13.5px; line-height: 1.4; }
 
 /* ─── Overlays ─── */
 .overlay {
@@ -445,6 +461,19 @@ body.quiz-active .topbar-btn { display: none; }
 .live-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 12px; }
 .live-warn { color: #b91c1c; font-weight: 700; font-size: 12px; }
 .live-controls { display: grid; gap: 12px; padding: 14px; }
+.switch-row { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.switch-row .btn { flex-shrink: 0; }
+.rules-card { padding: 0; }
+.rules-card summary { padding: 14px; cursor: pointer; font-weight: 700; display: flex; align-items: center; gap: 6px; list-style: none; }
+.rules-card summary::-webkit-details-marker { display: none; }
+.rules-card summary::after { content: "▾"; margin-left: auto; color: var(--muted); }
+.rules-card[open] summary::after { content: "▴"; }
+.rules-grid { display: grid; gap: 12px; padding: 0 14px 14px; }
+.rules-grid h4 { margin: 0 0 6px; font-size: 14px; }
+.rules-grid h4.bad { color: #b91c1c; }
+.rules-grid h4.warn { color: #92400e; }
+.rules-grid ul { margin: 0; padding-left: 18px; font-size: 14px; display: grid; gap: 3px; }
+@media (min-width: 760px) { .rules-grid { grid-template-columns: 1fr 1fr; } }
 .switch { display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .switch-ui {

@@ -64,19 +64,49 @@
                     <label class="switch">
                         <input type="checkbox" id="live-camera">
                         <span class="switch-ui"></span>
-                        <span><b>Kamera nazorati</b><small id="live-camera-note">Yangi boshlanadigan testlarga qo'llanadi</small></span>
+                        <span><b>Kamera nazorati</b><small id="live-camera-note">O'chirilsa — yangi testlar kamerasiz boshlanadi. Hozir yechayotganlarda kamera test oxirigacha ishlaydi.</small></span>
                     </label>
                     <label class="switch">
                         <input type="checkbox" id="live-paper">
                         <span class="switch-ui"></span>
-                        <span><b>Qog'ozda ishlash (matematika)</b><small>Pastga qarash va yozish harakati xavf hisoblanmaydi</small></span>
+                        <span><b>Qog'ozda ishlash (matematika)</b><small>Yoqilsa: pastga qarash, yozish harakati va biroz yonga qarash xavf hisoblanmaydi. Matematika testidan oldin yoqing.</small></span>
                     </label>
-                    <label class="switch">
-                        <input type="checkbox" id="live-sound" checked>
-                        <span class="switch-ui"></span>
-                        <span><b>Ovozli signal</b><small>Xavf aniqlanganda ovoz chiqadi</small></span>
-                    </label>
+                    <div class="switch-row">
+                        <label class="switch">
+                            <input type="checkbox" id="live-sound" checked>
+                            <span class="switch-ui"></span>
+                            <span><b>Ovozli signal</b><small>Xavf aniqlanganda admin panelning istalgan bo'limida ovoz chiqadi</small></span>
+                        </label>
+                        <button class="btn btn-ghost btn-sm" id="btn-sound-test" type="button"><i class="ri-volume-up-line"></i> Sinash</button>
+                    </div>
                 </div>
+                <details class="card rules-card">
+                    <summary><i class="ri-information-line"></i> Nima qoidabuzarlik, nima ogohlantirish?</summary>
+                    <div class="rules-grid">
+                        <div>
+                            <h4 class="bad"><i class="ri-alarm-warning-line"></i> Qoidabuzarlik (sanaladi, limitda test to'xtaydi)</h4>
+                            <ul>
+                                <li>Testdan / ilovadan chiqish, boshqa oyna ochish</li>
+                                <li>To'liq ekrandan chiqish, ekranni bo'lish, 2-varaq</li>
+                                <li>Kameradan chiqib ketish — yuz 5 s ko'rinmasa (qog'oz rejimida 12 s)</li>
+                                <li>Kamerada boshqa odam — 3 s</li>
+                                <li>Boshni burib turish — 8 s (qog'oz rejimida 15 s)</li>
+                                <li>Pastga qarab turish — 8 s (qog'oz rejimida hisoblanmaydi)</li>
+                                <li>Kamerani o'chirish</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="warn"><i class="ri-error-warning-line"></i> Ogohlantirish (yoziladi, sizga signal keladi)</h4>
+                            <ul>
+                                <li>Boshni burish yoki pastga qarash — 3 s</li>
+                                <li>Ortiqcha harakat</li>
+                                <li>Nusxalash, skrinshot, taqiqlangan tugmalar</li>
+                                <li>Juda tez javob, internet uzilishi</li>
+                            </ul>
+                            <p class="muted small">Qoralama (✏️) ochiq paytda bosh holati tekshirilmaydi — o'quvchi ekranga yozayotgan bo'ladi. Suratlar faqat test boshida va qoida buzilgan paytda olinadi.</p>
+                        </div>
+                    </div>
+                </details>
                 <p class="muted small">Kadr har 4 soniyada yangilanadi. O'quvchini bossangiz — katta oynada <b>har soniyada</b> ko'rasiz. Tizim o'zi kuzatadi: kameradan chiqish, boshqa odam, bosh burish, pastga qarash, ortiqcha harakat — qizil ramka va signal bilan bildiriladi.</p>
                 <div class="live-grid" id="live-grid"></div>
             </section>

@@ -10,6 +10,9 @@ const SAMPLE_MS = 400;         // sekundiga ~2.5 marta tekshiriladi
 const CALIBRATION_SAMPLES = 6; // boshida o'quvchining odatiy holati o'rganiladi
 const YAW_LIMIT = 0.32;        // bosh yon tomonga burilishi (ko'z orasi masofasiga nisbatan)
 const EAR_YAW_LIMIT = 0.35;   // quloq–ko'z masofalari nisbati bo'yicha burilish
+// Kuchli burilish (qog'ozda ishlash rejimida faqat shu hisobga olinadi — biroz yonga qarash kechiriladi)
+const STRONG_YAW_LIMIT = 0.55;
+const STRONG_EAR_YAW_LIMIT = 0.6;
 const PITCH_LIMIT = 0.16;      // pastga qarash
 const MOTION_LIMIT = 22;       // kadrlar orasidagi o'rtacha yorqinlik farqi (0–255)
 
@@ -105,7 +108,7 @@ export async function startFaceMonitor(video, onSample) {
         lastTs = ts;
         const result = detector.detectForVideo(video, ts);
         const faces = (result.detections || []).filter(d => (d.categories?.[0]?.score ?? 1) >= 0.5);
-        const sample = { faces: faces.length, turned: false, down: false, motion: motionLevel() > MOTION_LIMIT };
+        const sample = { faces: faces.length, turned: false, strongTurn: false, down: false, motion: motionLevel() > MOTION_LIMIT };
 
         if (faces.length === 1) {
           const p = pose(faces[0]);
@@ -119,7 +122,10 @@ export async function startFaceMonitor(video, onSample) {
                 base = { yaw: median(calib.yaw), earYaw: median(calib.earYaw), pitch: median(calib.pitch) };
               }
             } else {
-              sample.turned = Math.abs(p.yaw - base.yaw) > YAW_LIMIT || Math.abs(p.earYaw - base.earYaw) > EAR_YAW_LIMIT;
+              const dYaw = Math.abs(p.yaw - base.yaw);
+              const dEar = Math.abs(p.earYaw - base.earYaw);
+              sample.turned = dYaw > YAW_LIMIT || dEar > EAR_YAW_LIMIT;
+              sample.strongTurn = dYaw > STRONG_YAW_LIMIT || dEar > STRONG_EAR_YAW_LIMIT;
               sample.down = p.pitch - base.pitch > PITCH_LIMIT;
             }
           }

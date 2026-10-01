@@ -31,21 +31,28 @@
     face: null,
     faceSince: {},
     faceReported: {},
-    faceEvidence: {},
+    faceLast: {},
     timers: {}
   };
 
-  // Kamera orqali aniqlanadigan holatlar (ms):
-  //   show    — o'quvchi ekranida qizil ogohlantirish
-  //   report  — o'qituvchiga yuboriladi (face_missing/multiple_faces — darhol qoidabuzarlik)
-  //   violate — shuncha davom etsa qoidabuzarlik sanaladi (<turi>_long)
+  // Kamera orqali aniqlanadigan holatlar. O'quvchi ekranida ogohlantirish chiqqan zahoti
+  // o'qituvchiga ham shu paytdagi surat bilan yuboriladi (har safar — necha marta bo'lgani ko'rinadi).
+  //   warn   — ogohlantirish turi va vaqti (ms)
+  //   viol   — shuncha davom etsa qoidabuzarlik (sanaladi)
   const FACE_RULES = [
-    { type: 'face_missing', show: 800, report: 5000, text: 'Yuzingiz kamerada ko\'rinmayapti! Kameraga qarang.' },
-    { type: 'multiple_faces', show: 500, report: 3000, text: 'Kamerada boshqa odam bor! Yolg\'iz ishlang.' },
-    { type: 'head_turned', show: 1200, report: 3000, violate: 8000, text: 'Boshingizni burmang — ekranga qarang!' },
-    { type: 'looking_down', show: 1200, report: 3000, violate: 8000, text: 'Pastga qaramang — ekranga qarang!' },
-    { type: 'motion', show: 800, report: 2500, text: 'Ortiqcha harakat qilmang!' }
+    { key: 'face_missing', warn: 'face_away', warnAt: 1000, viol: 'face_missing', violAt: 3000,
+      text: 'Yuzingiz kamerada ko\'rinmayapti! Kameraga qarang.' },
+    { key: 'multiple_faces', viol: 'multiple_faces', violAt: 1000,
+      text: 'Kamerada boshqa odam bor! Yolg\'iz ishlang.' },
+    { key: 'head_turned', warn: 'head_turned', warnAt: 1000, viol: 'head_turned_long', violAt: 6000,
+      text: 'Boshingizni burmang — ekranga qarang!' },
+    { key: 'looking_down', warn: 'looking_down', warnAt: 1000, viol: 'looking_down_long', violAt: 6000,
+      text: 'Pastga qaramang — ekranga qarang!' },
+    { key: 'motion', warn: 'motion', warnAt: 500,
+      text: 'Ortiqcha harakat qilmang!' }
   ];
+  // Aniqlash shovqini: holat shuncha uzilmasa — o'sha bitta holat hisoblanadi (qayta sanalmaydi)
+  const FACE_GAP_MS = 1000;
 
   // ─── EKRANLAR ──────────────────────────────────────────────────────────────
   function show(id) {
@@ -126,8 +133,47 @@
     $('camera-note').hidden = !needCamera;
     $('rules-error').textContent = '';
     clear($('btn-rules-ok')).append(icon(needCamera ? 'camera-line' : 'play-fill'), ' Roziman — testni boshlash');
+    showCameraHelp(null);
     $('modal-rules').hidden = false;
-    if (needCamera) preloadFace();
+    if (needCamera) {
+      preloadFace();
+      checkCameraPermission();
+    }
+  }
+
+  // Kamera ruxsati yo'q bo'lsa — qanday ruxsat berish ko'rsatmasi (brauzer so'rov oynasini
+  // bir marta rad etilgandan keyin qayta chiqarmaydi, ruxsatni faqat foydalanuvchi o'zi qaytaradi)
+  function showCameraHelp(code) {
+    const box = $('camera-help');
+    box.hidden = !code;
+    if (code) clear($('btn-rules-ok')).append(icon('refresh-line'), ' Qayta urinish');
+    if (!code) return;
+    const mobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+    const steps = {
+      denied: mobile
+        ? ['Brauzer menyusini oching (⋮) → Sozlamalar → Sayt sozlamalari → Kamera',
+          'Ushbu sayt uchun "Ruxsat berish" ni tanlang',
+          'Pastdagi "Qayta urinish" tugmasini bosing']
+        : ['Manzil satrining chap tomonidagi 🔒 (yoki o\'ng tomondagi 📷 ✕) belgisini bosing',
+          '"Kamera" yonidagi tugmani "Ruxsat berish" (Allow) holatiga o\'tkazing',
+          'Pastdagi "Qayta urinish" tugmasini bosing (kerak bo\'lsa sahifani yangilang)'],
+      busy: ['Kamerani ishlatayotgan dasturlarni (Zoom, Telegram, Skype, Kamera) yoping', '"Qayta urinish" tugmasini bosing'],
+      nocamera: ['Kompyuterga kamera (veb-kamera) ulang yoki testni telefondan topshiring', '"Qayta urinish" tugmasini bosing'],
+      other: ['Sahifani yangilang yoki boshqa brauzerda (Chrome) oching', '"Qayta urinish" tugmasini bosing']
+    }[code] || [];
+    clear($('camera-help-steps')).append(...steps.map(s => h('li', { text: s })));
+  }
+
+  // Oyna ochilganda ruxsat oldindan rad etilganini bilsak — ko'rsatmani darhol chiqaramiz
+  async function checkCameraPermission() {
+    try {
+      const st = await navigator.permissions.query({ name: 'camera' });
+      if (st.state === 'denied') {
+        $('rules-error').textContent = 'Bu saytga kameradan foydalanish taqiqlangan. Avval ruxsat bering.';
+        showCameraHelp('denied');
+      }
+      st.onchange = () => { if (st.state !== 'denied') { showCameraHelp(null); $('rules-error').textContent = ''; } };
+    } catch { /* Safari/Firefox bu so'rovni qo'llamasligi mumkin */ }
   }
 
   function preloadFace() {
@@ -160,11 +206,13 @@
       beginQuiz(res);
     } catch (e2) {
       errEl.textContent = e2.message || 'Xatolik yuz berdi';
+      showCameraHelp(e2.code);
       stopCamera();
       exitFullscreen();
     } finally {
       btn.disabled = false;
-      btn.innerHTML = label;
+      if ($('camera-help').hidden) btn.innerHTML = label;
+      else clear(btn).append(icon('refresh-line'), ' Qayta urinish');
     }
   }
 
@@ -376,10 +424,17 @@
   }
 
   // ─── NAZORAT (PROCTORING) ──────────────────────────────────────────────────
+  // Hodisa o'qituvchiga yuboriladi. Kamera yoqilgan bo'lsa — aynan shu paytdagi kadr ham (dalil sifatida).
   async function report(type, detail = '', keepalive = false) {
     if (!S.token || !S.active) return false;
+    const body = { type, detail };
+    // Ilovadan chiqish paytida kadr eskirgan/qora bo'ladi — yubormaymiz; keepalive so'rovi ham kichik bo'lishi kerak
+    if (!keepalive && type !== 'tab_hidden' && type !== 'ai_unavailable') {
+      const image = captureFrame(false);
+      if (image) body.image = image;
+    }
     try {
-      const r = await api('/api/attempt/event', { method: 'POST', attempt: S.token, body: { type, detail }, keepalive });
+      const r = await api('/api/attempt/event', { method: 'POST', attempt: S.token, body, keepalive });
       applyEventResult(r);
       return true;
     } catch {
@@ -396,7 +451,6 @@
       ? `Qoidabuzarliklar: ${v} / ${st.max_violations}. Limitga yetganda test to'xtatiladi.`
       : `Qoidabuzarliklar: ${v}`;
     $('overlay-warning').hidden = false;
-    snapshot('violation');
   }
 
   function onVisibility() {
@@ -558,13 +612,29 @@
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       throw new Error('Brauzeringiz kamerani qo\'llab-quvvatlamaydi. Chrome yoki Safari\'dan foydalaning.');
     }
+    const fail = (code, message) => Object.assign(new Error(message), { code });
     try {
-      S.stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
-        audio: false
-      });
-    } catch {
-      throw new Error('Kameraga ruxsat berilmadi. Brauzer sozlamalaridan kameraga ruxsat bering.');
+      try {
+        S.stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
+          audio: false
+        });
+      } catch (err) {
+        // Ba'zi kompyuter kameralari o'lcham talablarini qo'llamaydi — oddiy so'rov bilan qayta urinamiz
+        if (err.name !== 'OverconstrainedError') throw err;
+        S.stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+    } catch (err) {
+      if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+        throw fail('denied', 'Brauzer kameraga ruxsat bermadi. Pastdagi ko\'rsatma bo\'yicha ruxsat bering.');
+      }
+      if (err.name === 'NotFoundError' || err.name === 'OverconstrainedError') {
+        throw fail('nocamera', 'Kamera topilmadi. Kompyuterga kamera ulang yoki testni telefondan topshiring.');
+      }
+      if (err.name === 'NotReadableError' || err.name === 'AbortError') {
+        throw fail('busy', 'Kamera boshqa dasturda band (Zoom, Telegram, Kamera ilovasi...). Ularni yopib, qayta urining.');
+      }
+      throw fail('other', 'Kamerani yoqib bo\'lmadi: ' + (err.message || err.name));
     }
     const v = $('cam-preview');
     v.srcObject = S.stream;
@@ -715,13 +785,13 @@
   // Qog'ozda ishlashga ruxsat bo'lsa — pastga qarash va harakat kechiriladi, faqat kuchli burilish hisoblanadi.
   function faceRules() {
     const posture = ['head_turned', 'looking_down', 'motion'];
-    if (!$('draft').hidden) return FACE_RULES.filter(r => !posture.includes(r.type));
+    if (!$('draft').hidden) return FACE_RULES.filter(r => !posture.includes(r.key));
     if (!S.settings.allow_paper) return FACE_RULES;
     return FACE_RULES
-      .filter(r => r.type !== 'looking_down' && r.type !== 'motion')
+      .filter(r => r.key !== 'looking_down' && r.key !== 'motion')
       .map(r => {
-        if (r.type === 'face_missing') return { ...r, show: 4000, report: 12000 };
-        if (r.type === 'head_turned') return { ...r, show: 3000, report: 5000, violate: 15000, strong: true };
+        if (r.key === 'face_missing') return { ...r, warnAt: 2000, violAt: 10000 };
+        if (r.key === 'head_turned') return { ...r, violAt: 13000, strong: true };
         return r;
       });
   }
@@ -738,36 +808,42 @@
       looking_down: s.faces === 1 && s.down,
       motion: s.motion
     };
-    const live = new Set(rules.map(r => r.type));
+    const enabled = new Set(rules.map(r => r.key));
     let banner = null;
-    for (const type of Object.keys(active)) {
-      if (!active[type] || !live.has(type)) {
-        delete S.faceSince[type];
-        delete S.faceReported[type];
-        delete S.faceEvidence[type];
+
+    for (const key of Object.keys(active)) {
+      if (active[key] && enabled.has(key)) {
+        S.faceLast[key] = now;
+        continue;
+      }
+      // Holat tugadi (qisqa uzilishlar hisobga olinmaydi) — keyingi safar yangi holat sifatida sanaladi
+      if (!enabled.has(key) || now - (S.faceLast[key] || 0) > FACE_GAP_MS) {
+        delete S.faceSince[key];
+        delete S.faceReported[key];
       }
     }
+
     for (const r of rules) {
-      if (!active[r.type]) continue;
-      const since = S.faceSince[r.type] || (S.faceSince[r.type] = now);
-      const dur = now - since;
+      const since = S.faceSince[r.key];
+      if (!active[r.key] && !since) continue;
+      const start = since || (S.faceSince[r.key] = now);
+      if (!active[r.key]) continue; // qisqa uzilish — vaqt davom etadi, lekin hozir signal yo'q
+      const dur = now - start;
       const secs = `${(dur / 1000).toFixed(1)} soniya`;
-      if (dur >= r.show) {
-        if (!banner) banner = r.text;
-        // Dalil surati — holat endigina aniqlangan paytdagi kadr (o'quvchi hali burilgan/chiqqan holda)
-        if (!S.faceEvidence[r.type]) S.faceEvidence[r.type] = captureFrame(false);
-      }
-      const done = S.faceReported[r.type] || (S.faceReported[r.type] = {});
-      if (dur >= r.report && !done.report) {
-        done.report = true;
-        report(r.type, secs);
-        sendFrame(S.faceEvidence[r.type] || captureFrame(false), r.type);
+      const firstAt = r.warn ? r.warnAt : r.violAt;
+      if (dur >= firstAt && !banner) banner = r.text;
+
+      const done = S.faceReported[r.key] || (S.faceReported[r.key] = {});
+      // Ogohlantirish: o'quvchi ekranida chiqqan paytda o'qituvchiga ham — shu paytdagi surat bilan
+      if (r.warn && dur >= r.warnAt && !done.warn) {
+        done.warn = true;
+        report(r.warn, secs);
         if (navigator.vibrate) navigator.vibrate(200);
       }
-      if (r.violate && dur >= r.violate && !done.violate) {
-        done.violate = true;
-        report(r.type + '_long', secs);
-        sendFrame(captureFrame(false), r.type + '_long');
+      // Qoidabuzarlik: holat davom etsa
+      if (r.viol && dur >= r.violAt && !done.viol) {
+        done.viol = true;
+        report(r.viol, secs);
         if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
       }
     }

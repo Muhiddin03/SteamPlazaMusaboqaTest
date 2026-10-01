@@ -53,7 +53,8 @@
     connection_gap: 'Aloqa uzildi',
     reload: 'Sahifani qayta yukladi',
     fast_answer: 'Juda tez javob berdi',
-    face_missing: 'Kameradan chiqib ketdi (yuz ko\'rinmadi)',
+    face_away: 'Yuzi kameradan chiqdi',
+    face_missing: 'Uzoq vaqt kameradan chiqib ketdi',
     multiple_faces: 'Kamerada boshqa odam bor',
     head_turned: 'Boshini yon tomonga burdi',
     head_turned_long: 'Uzoq vaqt boshqa tomonga qaradi',
@@ -345,6 +346,16 @@
     let stopped = false;
     let url = null;
     const sleep = ms => new Promise(res => setTimeout(res, ms));
+    // Hodisa suratlari har 3 soniyada qayta yuklanmasligi uchun kesh
+    const photoUrls = new Map();
+    const focusPhoto = (img, snapshotId, caption) => {
+      const show = u => { img.src = u; img.addEventListener('click', () => openPhoto(u, caption)); };
+      if (photoUrls.has(snapshotId)) return show(photoUrls.get(snapshotId));
+      aapi('/api/admin/snapshots/' + snapshotId, { raw: true })
+        .then(res => res.blob())
+        .then(b => { const u = URL.createObjectURL(b); photoUrls.set(snapshotId, u); show(u); })
+        .catch(() => {});
+    };
 
     const img = h('img', { class: 'focus-img', alt: `${r.student_name} kamerasi` });
     const cam = h('div', { class: 'focus-cam' }, img,
@@ -373,6 +384,7 @@
       onClose: () => {
         stopped = true;
         if (url) URL.revokeObjectURL(url);
+        photoUrls.forEach(u => URL.revokeObjectURL(u));
       }
     });
 
@@ -404,18 +416,30 @@
             h('span', { text: `${Math.min(d.current_index + 1, d.question_count || 0)}/${d.question_count || 0}-savol` }),
             h('span', { class: 'badge ' + (d.violations ? 'risk-high' : 'risk-low') }, icon('alarm-warning-line'), ` ${d.violations} qoidabuzarlik`));
           const recent = d.events.slice(-8).reverse();
-          clear(events).append(recent.length
-            ? h('ol', { class: 'timeline' }, recent.map(e => h('li', { class: e.is_violation || ALERT_UI.has(e.type) ? 'viol' : '' },
-              h('time', { text: fmtTime(e.created_at) }),
-              h('div', {}, h('b', { text: EVENTS[e.type] || e.type }), e.detail ? h('div', { class: 'muted small', text: e.detail }) : null))))
-            : h('p', { class: 'muted', text: 'Hozircha hodisa yo\'q — o\'quvchi qoidaga amal qilmoqda.' }));
+          clear(events).append(
+            eventSummary(d.events),
+            recent.length
+              ? h('ol', { class: 'timeline' }, recent.map(e => {
+                const label = EVENTS[e.type] || e.type;
+                let thumb = null;
+                if (e.snapshot_id) {
+                  thumb = h('img', { class: 'ev-photo', alt: label, title: 'Kattalashtirish uchun bosing' });
+                  focusPhoto(thumb, e.snapshot_id, `${fmtTime(e.created_at)} · ${label}`);
+                }
+                return h('li', { class: e.is_violation ? 'viol' : ALERT_UI.has(e.type) ? 'warnev' : '' },
+                  h('time', { text: fmtTime(e.created_at) }),
+                  h('div', { class: 'ev-body' },
+                    h('div', {}, h('b', { text: label }), e.detail ? h('div', { class: 'muted small', text: e.detail }) : null),
+                    thumb));
+              }))
+              : h('p', { class: 'muted', text: 'Hozircha hodisa yo\'q — o\'quvchi qoidaga amal qilmoqda.' }));
         } catch { /* keyingi urinishda */ }
         await sleep(3000);
       }
     })();
   }
 
-  const ALERT_UI = new Set(['face_missing', 'multiple_faces', 'head_turned', 'head_turned_long', 'looking_down', 'looking_down_long', 'motion']);
+  const ALERT_UI = new Set(['face_away', 'face_missing', 'multiple_faces', 'head_turned', 'head_turned_long', 'looking_down', 'looking_down_long', 'motion']);
 
   // ─── SINFLAR ───────────────────────────────────────────────────────────────
   async function loadClasses() {
@@ -934,13 +958,39 @@
       kv('Qurilma', shortUA(d.user_agent)),
       kv('IP', d.ip || '—'));
 
+    // Surat (blob) yuklab, img ga qo'yadi; bosilsa katta ko'rinishda ochiladi
+    const loadPhoto = (img, snapshotId, caption) => {
+      aapi('/api/admin/snapshots/' + snapshotId, { raw: true })
+        .then(r => r.blob())
+        .then(b => {
+          const u = URL.createObjectURL(b);
+          objectUrls.push(u);
+          img.src = u;
+          img.addEventListener('click', () => openPhoto(u, caption));
+        })
+        .catch(() => { img.alt = 'Yuklanmadi'; });
+    };
+
+    const summary = eventSummary(d.events);
     const events = d.events.length
-      ? h('ol', { class: 'timeline' }, d.events.map(e => h('li', { class: e.is_violation ? 'viol' : '' },
-        h('time', { text: fmtTime(e.created_at) }),
-        h('div', {},
-          h('b', { text: EVENTS[e.type] || e.type }),
-          e.question_index ? h('small', { text: ` · ${e.question_index}-savol` }) : null,
-          e.detail ? h('div', { class: 'muted small', text: e.detail }) : null))))
+      ? h('ol', { class: 'timeline' }, d.events.map(e => {
+        const label = EVENTS[e.type] || e.type;
+        let thumb = null;
+        if (e.snapshot_id) {
+          thumb = h('img', { class: 'ev-photo', alt: `${label} — surat`, loading: 'lazy', title: 'Kattalashtirish uchun bosing' });
+          loadPhoto(thumb, e.snapshot_id, `${fmtTime(e.created_at)} · ${label}`);
+        }
+        return h('li', { class: (e.is_violation ? 'viol' : ALERT_UI.has(e.type) ? 'warnev' : '') + (thumb ? ' has-photo' : '') },
+          h('time', { text: fmtTime(e.created_at) }),
+          h('div', { class: 'ev-body' },
+            h('div', {},
+              h('b', { text: label }),
+              e.is_violation ? h('span', { class: 'badge risk-high ev-kind', text: 'Qoidabuzarlik' })
+                : ALERT_UI.has(e.type) ? h('span', { class: 'badge risk-medium ev-kind', text: 'Ogohlantirish' }) : null,
+              e.question_index ? h('small', { text: ` · ${e.question_index}-savol` }) : null,
+              e.detail ? h('div', { class: 'muted small', text: e.detail }) : null),
+            thumb));
+      }))
       : h('p', { class: 'muted', text: d.status === 'legacy' ? 'Eski versiyadagi natija — nazorat ma\'lumoti yo\'q.' : 'Hech qanday qoidabuzarlik qayd etilmadi.' });
 
     const answers = d.answers.length
@@ -953,18 +1003,19 @@
         !x.is_correct && x.correct_answer ? h('div', { class: 'muted small', text: `To'g'ri javob: ${x.correct_answer}` }) : null)))
       : h('p', { class: 'muted', text: 'Javoblar yo\'q' });
 
+    // Hodisaga bog'lanmagan suratlar (masalan, test boshidagi) — alohida
+    const linked = new Set(d.events.map(e => e.snapshot_id).filter(Boolean));
+    const otherShots = d.snapshots.filter(s => !linked.has(s.id));
     const photos = h('div', { class: 'photos' });
-    if (d.snapshots.length) {
-      for (const s of d.snapshots) {
-        const img = h('img', { alt: `Surat ${fmtTime(s.created_at)}`, loading: 'lazy' });
-        photos.append(h('figure', {}, img, h('figcaption', { text: `${fmtTime(s.created_at)} · ${snapReason(s.reason)}` })));
-        aapi('/api/admin/snapshots/' + s.id, { raw: true })
-          .then(r => r.blob())
-          .then(b => { const u = URL.createObjectURL(b); objectUrls.push(u); img.src = u; })
-          .catch(() => { img.alt = 'Yuklanmadi'; });
+    if (otherShots.length) {
+      for (const s of otherShots) {
+        const caption = `${fmtTime(s.created_at)} · ${snapReason(s.reason)}`;
+        const img = h('img', { alt: `Surat ${caption}`, loading: 'lazy' });
+        photos.append(h('figure', {}, img, h('figcaption', { text: caption })));
+        loadPhoto(img, s.id, caption);
       }
     } else {
-      photos.append(h('p', { class: 'muted', text: 'Kamera suratlari yo\'q' }));
+      photos.append(h('p', { class: 'muted', text: 'Boshqa suratlar yo\'q' }));
     }
 
     const actions = [];
@@ -999,9 +1050,10 @@
       wide: true,
       body: h('div', { class: 'detail' },
         info,
-        h('h4', {}, icon('shield-user-line'), ' Nazorat jurnali'), events,
+        h('h4', {}, icon('alarm-warning-line'), ' Ogohlantirish va qoidabuzarliklar — necha marta'), summary,
+        h('h4', {}, icon('shield-user-line'), ` Nazorat jurnali (${d.events.length}) — har biri surati bilan`), events,
         h('h4', {}, icon('list-check-2'), ` Javoblar (${d.answers.length})`), answers,
-        h('h4', {}, icon('camera-line'), ` Kamera suratlari (${d.snapshots.length})`), photos),
+        h('h4', {}, icon('camera-line'), ` Test boshidagi va boshqa suratlar (${otherShots.length})`), photos),
       actions,
       onClose: () => {
         A.detailOpen = false;
@@ -1009,6 +1061,27 @@
         loadAttempts(true);
       }
     });
+  }
+
+  // Har bir hodisa turi necha marta bo'lgani: qoidabuzarliklar va ogohlantirishlar alohida
+  function eventSummary(events) {
+    const viol = new Map();
+    const warn = new Map();
+    for (const e of events) {
+      const map = e.is_violation ? viol : (ALERT_UI.has(e.type) || Report.WARNING_TYPES.includes(e.type)) ? warn : null;
+      if (map) map.set(e.type, (map.get(e.type) || 0) + 1);
+    }
+    if (!viol.size && !warn.size) return h('p', { class: 'muted', text: 'Ogohlantirish ham, qoidabuzarlik ham bo\'lmadi.' });
+    const chips = (map, cls) => [...map.entries()].sort((a, b) => b[1] - a[1])
+      .map(([t, n]) => h('span', { class: 'badge ' + cls }, `${EVENTS[t] || t} — ${n} marta`));
+    return h('div', { class: 'ev-summary' },
+      viol.size ? h('div', {}, h('small', { class: 'muted', text: 'Qoidabuzarliklar:' }), h('div', { class: 'chips' }, chips(viol, 'risk-high'))) : null,
+      warn.size ? h('div', {}, h('small', { class: 'muted', text: 'Ogohlantirishlar:' }), h('div', { class: 'chips' }, chips(warn, 'risk-medium'))) : null);
+  }
+
+  // Suratni katta ko'rinishda ochish
+  function openPhoto(url, caption) {
+    openModal({ title: caption, wide: true, body: h('img', { class: 'photo-big', src: url, alt: caption }) });
   }
 
   function kv(k, v) {

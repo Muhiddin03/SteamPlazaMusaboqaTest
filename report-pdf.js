@@ -15,7 +15,7 @@ const Report = (() => {
   const M = 14;
 
   // Ogohlantirish sifatida sanaladigan hodisalar (qoidabuzarliklar attempt.violations da)
-  const WARNING_TYPES = ['head_turned', 'looking_down', 'motion', 'copy', 'paste', 'key_blocked', 'screenshot',
+  const WARNING_TYPES = ['face_away', 'head_turned', 'looking_down', 'motion', 'copy', 'paste', 'key_blocked', 'screenshot',
     'window_blur', 'devtools', 'offline', 'reload', 'fast_answer', 'connection_gap', 'camera_denied', 'focus_lost_short'];
 
   function warningCount(a) {
@@ -201,6 +201,26 @@ const Report = (() => {
       y += 6;
     }
 
+    // Xulosa: har bir hodisa turi necha marta bo'lgani
+    const count = pred => {
+      const m = new Map();
+      for (const e of a.events) if (pred(e)) m.set(e.type, (m.get(e.type) || 0) + 1);
+      return [...m.entries()].sort((p, q) => q[1] - p[1]).map(([t, n]) => `${ui.EVENTS[t] || t} — ${n} marta`).join('; ');
+    };
+    const violText = count(e => e.is_violation);
+    const warnText = count(e => !e.is_violation && WARNING_TYPES.includes(e.type));
+    if (violText || warnText) {
+      doc.setFontSize(9);
+      for (const [label, text, color] of [['Qoidabuzarliklar: ', violText, RED], ['Ogohlantirishlar: ', warnText, AMBER]]) {
+        if (!text) continue;
+        const lines = doc.splitTextToSize(pdfText(label + text), PAGE_W - 2 * M);
+        doc.setTextColor(...color);
+        doc.text(lines, M, y);
+        y += lines.length * 4.2 + 1.5;
+      }
+      doc.setTextColor(...DARK);
+    }
+
     // Javoblar
     y = sectionTitle(doc, y + 2, `Javoblar (${a.answers.length})`);
     if (a.answers.length) {
@@ -348,7 +368,7 @@ const Report = (() => {
       let images = [];
       if (full && fetchImage && a.snapshots.length) {
         // Qoidabuzarlik paytidagi suratlar birinchi
-        const pick = [...a.snapshots].sort((x, z) => (z.reason === 'violation') - (x.reason === 'violation')).slice(0, perStudent)
+        const pick = [...a.snapshots].sort((x, z) => (z.reason !== 'start') - (x.reason !== 'start')).slice(0, perStudent)
           .sort((x, z) => x.id - z.id);
         images = (await Promise.all(pick.map(s => fetchImage(s.id).then(data => ({ ...s, data })).catch(() => null)))).filter(Boolean);
       }
@@ -401,5 +421,5 @@ const Report = (() => {
     doc.save(fileName(opts.name));
   }
 
-  return { ensureLib, pdfText, students, table, warningCount, grade, percent };
+  return { ensureLib, pdfText, students, table, warningCount, grade, percent, WARNING_TYPES };
 })();

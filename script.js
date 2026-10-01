@@ -39,16 +39,18 @@
   // o'qituvchiga ham shu paytdagi surat bilan yuboriladi (har safar — necha marta bo'lgani ko'rinadi).
   //   warn   — ogohlantirish turi va vaqti (ms)
   //   viol   — shuncha davom etsa qoidabuzarlik (sanaladi)
+  // Vaqtlar: 1–2 s chetga qarash tabiiy (o'ylash) — hisoblanmaydi; 4 s — ataylab, ogohlantirish;
+  // 10–12 s — kitob/telefondan javob o'qishga yetadi, qoidabuzarlik.
   const FACE_RULES = [
-    { key: 'face_missing', warn: 'face_away', warnAt: 6000, viol: 'face_missing', violAt: 20000,
+    { key: 'face_missing', warn: 'face_away', warnAt: 4000, viol: 'face_missing', violAt: 12000,
       text: 'Yuzingiz kamerada ko\'rinmayapti! Kameraga qarang.' },
-    { key: 'multiple_faces', warn: 'multiple_faces_short', warnAt: 2000, viol: 'multiple_faces', violAt: 6000,
+    { key: 'multiple_faces', warn: 'multiple_faces_short', warnAt: 2000, viol: 'multiple_faces', violAt: 5000,
       text: 'Kamerada boshqa odam bor! Yolg\'iz ishlang.' },
-    { key: 'head_turned', warn: 'head_turned', warnAt: 6000, viol: 'head_turned_long', violAt: 15000,
+    { key: 'head_turned', warn: 'head_turned', warnAt: 4000, viol: 'head_turned_long', violAt: 10000,
       text: 'Boshingizni burmang — ekranga qarang!' },
-    { key: 'looking_down', warn: 'looking_down', warnAt: 6000, viol: 'looking_down_long', violAt: 15000,
+    { key: 'looking_down', warn: 'looking_down', warnAt: 4000, viol: 'looking_down_long', violAt: 10000,
       text: 'Pastga qaramang — ekranga qarang!' },
-    { key: 'motion', warn: 'motion', warnAt: 6000,
+    { key: 'motion', warn: 'motion', warnAt: 4000,
       text: 'Ortiqcha harakat qilmang!' }
   ];
   // Aniqlash shovqini: holat shuncha uzilmasa — o'sha bitta holat hisoblanadi (qayta sanalmaydi)
@@ -792,8 +794,8 @@
       .filter(r => r.key !== 'looking_down' && r.key !== 'motion')
       .map(r => {
         // Qog'ozga egilganda yuz ko'rinmay qolishi tabiiy — kechroq hisoblanadi
-        if (r.key === 'face_missing') return { ...r, warnAt: 10000, violAt: 30000 };
-        if (r.key === 'head_turned') return { ...r, violAt: 20000, strong: true };
+        if (r.key === 'face_missing') return { ...r, warnAt: 6000, violAt: 20000 };
+        if (r.key === 'head_turned') return { ...r, violAt: 15000, strong: true };
         return r;
       });
   }

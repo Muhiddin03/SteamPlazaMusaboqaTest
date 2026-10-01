@@ -40,15 +40,15 @@
   //   warn   — ogohlantirish turi va vaqti (ms)
   //   viol   — shuncha davom etsa qoidabuzarlik (sanaladi)
   const FACE_RULES = [
-    { key: 'face_missing', warn: 'face_away', warnAt: 1000, viol: 'face_missing', violAt: 3000,
+    { key: 'face_missing', warn: 'face_away', warnAt: 6000, viol: 'face_missing', violAt: 20000,
       text: 'Yuzingiz kamerada ko\'rinmayapti! Kameraga qarang.' },
-    { key: 'multiple_faces', viol: 'multiple_faces', violAt: 1000,
+    { key: 'multiple_faces', warn: 'multiple_faces_short', warnAt: 2000, viol: 'multiple_faces', violAt: 6000,
       text: 'Kamerada boshqa odam bor! Yolg\'iz ishlang.' },
-    { key: 'head_turned', warn: 'head_turned', warnAt: 1000, viol: 'head_turned_long', violAt: 6000,
+    { key: 'head_turned', warn: 'head_turned', warnAt: 6000, viol: 'head_turned_long', violAt: 15000,
       text: 'Boshingizni burmang — ekranga qarang!' },
-    { key: 'looking_down', warn: 'looking_down', warnAt: 1000, viol: 'looking_down_long', violAt: 6000,
+    { key: 'looking_down', warn: 'looking_down', warnAt: 6000, viol: 'looking_down_long', violAt: 15000,
       text: 'Pastga qaramang — ekranga qarang!' },
-    { key: 'motion', warn: 'motion', warnAt: 500,
+    { key: 'motion', warn: 'motion', warnAt: 6000,
       text: 'Ortiqcha harakat qilmang!' }
   ];
   // Aniqlash shovqini: holat shuncha uzilmasa — o'sha bitta holat hisoblanadi (qayta sanalmaydi)
@@ -122,8 +122,9 @@
       'Yoningizda boshqa odam bo\'lishi',
       'Nusxalash va skrinshot'
     ];
+    $('paper-note').hidden = !s.allow_paper;
     const info = [
-      s.allow_paper ? 'Qog\'ozda misol ishlash mumkin. Ekranda ✏️ qoralama ham bor' : 'Misol ishlash uchun ekranda ✏️ qoralama bor',
+      'Misol ishlash uchun ekranda ✏️ qoralama bor',
       s.max_violations > 0 ? `${s.max_violations} ta qoidabuzarlikda test avtomatik to'xtaydi` : null,
       'Test faqat bir marta topshiriladi'
     ].filter(Boolean);
@@ -790,8 +791,9 @@
     return FACE_RULES
       .filter(r => r.key !== 'looking_down' && r.key !== 'motion')
       .map(r => {
-        if (r.key === 'face_missing') return { ...r, warnAt: 2000, violAt: 10000 };
-        if (r.key === 'head_turned') return { ...r, violAt: 13000, strong: true };
+        // Qog'ozga egilganda yuz ko'rinmay qolishi tabiiy — kechroq hisoblanadi
+        if (r.key === 'face_missing') return { ...r, warnAt: 10000, violAt: 30000 };
+        if (r.key === 'head_turned') return { ...r, violAt: 20000, strong: true };
         return r;
       });
   }

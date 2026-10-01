@@ -54,6 +54,7 @@
     reload: 'Sahifani qayta yukladi',
     fast_answer: 'Juda tez javob berdi',
     face_away: 'Yuzi kameradan chiqdi',
+    multiple_faces_short: 'Yonida boshqa odam ko\'rindi',
     face_missing: 'Uzoq vaqt kameradan chiqib ketdi',
     multiple_faces: 'Kamerada boshqa odam bor',
     head_turned: 'Boshini yon tomonga burdi',
@@ -439,7 +440,7 @@
     })();
   }
 
-  const ALERT_UI = new Set(['face_away', 'face_missing', 'multiple_faces', 'head_turned', 'head_turned_long', 'looking_down', 'looking_down_long', 'motion']);
+  const ALERT_UI = new Set(['face_away', 'multiple_faces_short', 'face_missing', 'multiple_faces', 'head_turned', 'head_turned_long', 'looking_down', 'looking_down_long', 'motion']);
 
   // ─── SINFLAR ───────────────────────────────────────────────────────────────
   async function loadClasses() {

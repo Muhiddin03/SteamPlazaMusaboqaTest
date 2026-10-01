@@ -367,6 +367,8 @@ body.quiz-active .topbar-btn { display: none; }
     border-radius: 12px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46;
 }
 .camera-note i { font-size: 26px; color: var(--primary-hover); flex-shrink: 0; }
+.paper-note { background: #eff6ff; border-color: #93c5fd; color: #1e3a8a; }
+.paper-note i { color: var(--info); }
 .camera-help {
     text-align: left; margin: 0 0 12px; padding: 12px; border-radius: 12px;
     background: #fff7ed; border: 1px solid #fdba74; color: #7c2d12; font-size: 14px;

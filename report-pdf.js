@@ -15,7 +15,7 @@ const Report = (() => {
   const M = 14;
 
   // Ogohlantirish sifatida sanaladigan hodisalar (qoidabuzarliklar attempt.violations da)
-  const WARNING_TYPES = ['face_away', 'head_turned', 'looking_down', 'motion', 'copy', 'paste', 'key_blocked', 'screenshot',
+  const WARNING_TYPES = ['face_away', 'multiple_faces_short', 'head_turned', 'looking_down', 'motion', 'copy', 'paste', 'key_blocked', 'screenshot',
     'window_blur', 'devtools', 'offline', 'reload', 'fast_answer', 'connection_gap', 'camera_denied', 'focus_lost_short'];
 
   function warningCount(a) {

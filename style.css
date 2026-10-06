@@ -654,3 +654,65 @@ body.quiz-active .topbar-btn { display: none; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ─── Fanlar, rasmli va yozma javobli savollar ─── */
+.class-subjects { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-top: -2px; }
+.subject-grid { grid-template-columns: 1fr; }
+.subject-btn { flex-direction: row; justify-content: flex-start; gap: 12px; min-height: 72px; text-align: left; }
+.subject-btn i { font-size: 28px; }
+.subject-btn .class-subjects { margin: 0 0 0 auto; }
+#scr-subjects .chip-primary { margin-bottom: 6px; }
+
+.q-image {
+    position: relative; display: block; width: 100%; margin: 0 0 12px; padding: 0;
+    border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #f8fafc; cursor: zoom-in;
+}
+.q-image img { display: block; width: 100%; max-height: 32dvh; object-fit: contain; background: #fff; }
+.q-image.loading { min-height: 90px; background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+.q-image-zoom {
+    position: absolute; right: 8px; bottom: 8px; width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; background: rgba(15, 23, 42, .65); color: #fff; font-size: 18px;
+}
+.image-overlay { flex-direction: column; gap: 14px; background: rgba(15, 23, 42, .95); z-index: 2600; }
+.image-scroll { max-width: 100%; max-height: 80dvh; overflow: auto; border-radius: 10px; -webkit-overflow-scrolling: touch; }
+.image-overlay img { display: block; max-width: 100%; max-height: 80dvh; object-fit: contain; background: #fff; }
+.image-overlay.wide .image-scroll { width: 100%; }
+.image-overlay.wide img { max-width: none; width: 230vw; max-height: none; }
+.image-hint { display: none; color: #cbd5e1; }
+.image-overlay.wide .image-hint { display: block; }
+
+.open-answer { display: grid; gap: 8px; }
+.open-answer label { font-weight: 700; font-size: 15px; }
+.open-answer input { font-size: 20px; font-weight: 700; padding: 14px 16px; border-color: var(--primary); }
+.open-answer small { font-size: 12.5px; }
+
+/* Admin: savollar ro'yxati */
+.subject-head { display: flex; align-items: center; gap: 6px; margin: 8px 0 2px; font-size: 16px; color: var(--primary-hover); }
+.q-item-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.q-item-img { display: block; max-width: 100%; max-height: 180px; margin-top: 10px; border-radius: 8px; border: 1px solid var(--border); background: #fff; }
+.t-image-preview { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.t-image-preview img { max-height: 90px; max-width: 220px; border-radius: 8px; border: 1px solid var(--border); }
+
+/* Admin: Word import */
+.import-card { border: 2px dashed #93c5fd; background: #f8fbff; }
+.import-card input[type=file] { padding: 8px; background: #fff; }
+.docx-preview { display: grid; gap: 12px; margin-top: 12px; }
+.import-sets { display: grid; gap: 10px; }
+.import-set { background: #fff; border: 1px solid var(--border); border-left: 5px solid var(--primary); border-radius: 12px; padding: 10px 12px; }
+.import-set.bad { border-left-color: var(--danger); }
+.import-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.import-check input { width: 20px; height: 20px; margin: 0; accent-color: var(--primary); }
+.import-names { display: flex; gap: 6px; flex: 1 1 220px; }
+.import-names input { margin: 0; padding: 6px 10px; font-size: 14px; font-weight: 700; }
+.import-class { max-width: 110px; }
+.import-stats { display: flex; flex-wrap: wrap; gap: 4px; }
+.imp-errors { color: var(--danger); font-size: 13px; margin: 6px 0 0; padding-left: 18px; }
+.imp-warnings { color: #92400e; font-size: 13px; margin: 6px 0 0; padding-left: 18px; }
+.import-details summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--info); margin-top: 6px; }
+.import-details ol { margin: 8px 0 0; padding-left: 22px; display: grid; gap: 8px; font-size: 13.5px; max-height: 420px; overflow: auto; }
+.imp-q { font-weight: 600; white-space: pre-wrap; }
+.imp-img { display: block; max-width: 100%; max-height: 120px; margin: 4px 0; border-radius: 6px; border: 1px solid var(--border); }
+.imp-opts { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); }
+.imp-opts .ok { color: #047857; font-weight: 800; }
+.imp-ans b { color: #047857; }
+.imp-done { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #047857; }

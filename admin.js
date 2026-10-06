@@ -202,7 +202,7 @@
       const info = h('div', { class: 'live-info' },
         h('b', { text: r.student_name }),
         h('div', { class: 'live-meta' },
-          h('span', { class: 'chip', text: r.class_id }),
+          h('span', { class: 'chip', text: r.class_id + (r.subject ? ' · ' + r.subject : '') }),
           h('span', { text: `${Math.min(r.current_index + 1, r.question_count || 0)}/${r.question_count || 0}` }),
           r.violations > 0 ? h('span', { class: 'badge risk-high' }, icon('alarm-warning-line'), ` ${r.violations}`) : null),
         recentAlert
@@ -528,49 +528,147 @@
   }
 
   // ─── SAVOLLAR ──────────────────────────────────────────────────────────────
+  const subjectLabel = s => s || 'Umumiy';
+
+  // Sinfdagi fanlar ro'yxati (filtr va forma uchun)
+  function fillSubjectFilter() {
+    const cls = A.classes.find(c => c.id === $('t-class').value);
+    const subjects = (cls?.subjects || []).map(s => s.subject);
+    const sel = $('t-subject-filter');
+    const prev = sel.value;
+    clear(sel).append(h('option', { value: '', text: 'Barcha fanlar' }),
+      ...subjects.map(s => h('option', { value: s, text: `${subjectLabel(s)} (${cls.subjects.find(x => x.subject === s).count})` })));
+    sel.value = subjects.includes(prev) ? prev : '';
+    const all = new Set(A.classes.flatMap(c => (c.subjects || []).map(s => s.subject)).filter(Boolean));
+    clear($('t-subject-list')).append(...[...all].sort().map(s => h('option', { value: s })));
+  }
+
   async function loadTests() {
     const classId = $('t-class').value;
     const list = clear($('t-list'));
     $('t-count').textContent = 'Savollar';
+    fillSubjectFilter();
     if (!classId) {
       list.append(h('p', { class: 'empty', text: 'Avval "Sinflar" bo\'limida sinf qo\'shing' }));
       return;
     }
     list.append(h('div', { class: 'skeleton' }));
+    // Sinf tez almashtirilsa, eski so'rovning kech kelgan javobi yangisini bosib ketmasin
+    const seq = (A.testsSeq = (A.testsSeq || 0) + 1);
     try {
-      A.tests = await aapi('/api/admin/classes/' + encodeURIComponent(classId) + '/tests');
+      const tests = await aapi('/api/admin/classes/' + encodeURIComponent(classId) + '/tests');
+      if (seq !== A.testsSeq) return;
+      A.tests = tests;
       renderTests();
     } catch (err) {
+      if (seq !== A.testsSeq) return;
       clear(list).append(h('p', { class: 'empty error', text: err.message }));
     }
   }
 
+  // Savol rasmi (hamma ko'ra oladigan manzil, blob orqali — CSP img-src faqat o'z sayti)
+  const imageUrls = new Map();
+  function testImage(img, imageId) {
+    if (imageUrls.has(imageId)) { img.src = imageUrls.get(imageId); return; }
+    api('/api/test-images/' + imageId, { raw: true })
+      .then(r => r.blob())
+      .then(b => { const u = URL.createObjectURL(b); imageUrls.set(imageId, u); img.src = u; })
+      .catch(() => { img.alt = 'Rasm yuklanmadi'; });
+  }
+
   function renderTests() {
     const list = clear($('t-list'));
-    $('t-count').textContent = `Savollar (${A.tests.length})`;
-    if (!A.tests.length) {
+    const subject = $('t-subject-filter').value;
+    const rows = subject ? A.tests.filter(t => t.subject === subject) : A.tests;
+    $('t-count').textContent = `Savollar (${rows.length})`;
+    if (!rows.length) {
       list.append(h('p', { class: 'empty', text: 'Bu sinfda hali savol yo\'q' }));
       return;
     }
-    A.tests.forEach((t, i) => {
+    let lastSubject = null;
+    let n = 0;
+    for (const t of rows) {
+      if (t.subject !== lastSubject) {
+        lastSubject = t.subject;
+        n = 0;
+        list.append(h('h3', { class: 'subject-head' }, icon('book-2-line'), ' ', subjectLabel(t.subject),
+          h('small', { class: 'muted', text: ` — ${rows.filter(x => x.subject === t.subject).length} ta savol` })));
+      }
+      n++;
+      let img = null;
+      if (t.image_id) {
+        img = h('img', { class: 'q-item-img', alt: 'Savol rasmi' });
+        testImage(img, t.image_id);
+      }
       list.append(h('div', { class: 'card q-item' },
         h('div', { class: 'q-item-head' },
-          h('b', { class: 'q-item-text', text: `${i + 1}. ${t.question}` }),
+          h('div', {},
+            h('b', { class: 'q-item-text', text: `${n}. ${t.question}` }),
+            h('div', { class: 'q-item-tags' },
+              t.qtype === 'open' ? h('span', { class: 'badge st-active', text: 'Yozma javob' }) : null,
+              t.image_id ? h('span', { class: 'badge', text: 'Rasmli' }) : null)),
           h('div', { class: 'row-tight' },
             h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Tahrirlash', onclick: () => editTest(t) }, icon('edit-line')),
             h('button', { class: 'icon-btn danger', type: 'button', 'aria-label': 'O\'chirish', onclick: () => delTest(t) }, icon('delete-bin-line')))),
-        h('ul', { class: 'q-options' },
-          t.options.map(o => h('li', { class: o === t.correct_answer ? 'correct' : '' },
-            icon(o === t.correct_answer ? 'check-line' : 'close-line'), h('span', { text: o }))))));
-    });
+        img,
+        t.qtype === 'open'
+          ? h('ul', { class: 'q-options' }, h('li', { class: 'correct' }, icon('check-line'), h('span', { text: `To'g'ri javob: ${t.correct_answer}` })))
+          : h('ul', { class: 'q-options' },
+            t.options.map(o => h('li', { class: o === t.correct_answer ? 'correct' : '' },
+              icon(o === t.correct_answer ? 'check-line' : 'close-line'), h('span', { text: o }))))));
+    }
+  }
+
+  function syncTypeFields() {
+    const open = $('t-type').value === 'open';
+    $('t-wrong-box').hidden = open;
+    $('t-open-hint').hidden = !open;
+  }
+
+  // Tanlangan rasm faylini data URL ko'rinishida o'qish
+  A.formImage = undefined; // undefined — o'zgarmaydi, null — olib tashlash, string — yangi rasm
+  function onImagePick() {
+    const f = $('t-image').files[0];
+    const box = $('t-image-preview');
+    if (!f) return;
+    if (f.size > 1.5 * 1024 * 1024) {
+      toast('Rasm 1.5 MB dan oshmasin', 'error');
+      $('t-image').value = '';
+      return;
+    }
+    const r = new FileReader();
+    r.onload = () => {
+      A.formImage = r.result;
+      clear(box).append(h('img', { src: r.result, alt: 'Tanlangan rasm' }),
+        h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => {
+          A.formImage = A.editingId ? null : undefined;
+          $('t-image').value = '';
+          box.hidden = true;
+        } }, icon('close-line'), ' Rasmni olib tashlash'));
+      box.hidden = false;
+    };
+    r.readAsDataURL(f);
   }
 
   function editTest(t) {
     A.editingId = t.id;
+    $('t-subject').value = t.subject || '';
+    $('t-type').value = t.qtype === 'open' ? 'open' : 'choice';
     $('t-question').value = t.question;
     $('t-correct').value = t.correct_answer;
     const wrong = t.options.filter(o => o !== t.correct_answer);
     ['t-wrong1', 't-wrong2', 't-wrong3'].forEach((id, i) => { $(id).value = wrong[i] || ''; });
+    A.formImage = undefined;
+    $('t-image').value = '';
+    const box = clear($('t-image-preview'));
+    if (t.image_id) {
+      const img = h('img', { alt: 'Joriy rasm' });
+      testImage(img, t.image_id);
+      box.append(img, h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => { A.formImage = null; box.hidden = true; } },
+        icon('close-line'), ' Rasmni olib tashlash'));
+      box.hidden = false;
+    } else box.hidden = true;
+    syncTypeFields();
     $('t-cancel').hidden = false;
     $('t-targets-box').hidden = true;
     clear($('t-save')).append(icon('save-line'), ' Yangilash');
@@ -581,9 +679,13 @@
   function resetTestForm() {
     A.editingId = null;
     for (const id of ['t-question', 't-correct', 't-wrong1', 't-wrong2', 't-wrong3']) $(id).value = '';
+    A.formImage = undefined;
+    $('t-image').value = '';
+    $('t-image-preview').hidden = true;
     $('t-error').textContent = '';
     $('t-cancel').hidden = true;
     clear($('t-save')).append(icon('save-line'), ' Saqlash');
+    syncTypeFields();
     renderTargets();
   }
 
@@ -591,14 +693,18 @@
     e.preventDefault();
     const classId = $('t-class').value;
     const err = $('t-error');
+    const type = $('t-type').value;
     const body = {
+      subject: $('t-subject').value.trim(),
+      type,
       question: $('t-question').value,
       correct_answer: $('t-correct').value,
       wrong_answers: ['t-wrong1', 't-wrong2', 't-wrong3'].map(id => $(id).value).filter(v => v.trim())
     };
+    if (A.formImage !== undefined) body.image = A.formImage;
     if (!classId) return (err.textContent = 'Sinfni tanlang');
     if (!body.question.trim() || !body.correct_answer.trim()) return (err.textContent = 'Savol va to\'g\'ri javobni kiriting');
-    if (!body.wrong_answers.length) return (err.textContent = 'Kamida bitta xato javob kiriting');
+    if (type === 'choice' && !body.wrong_answers.length) return (err.textContent = 'Kamida bitta xato javob kiriting');
     err.textContent = '';
     try {
       if (A.editingId) {
@@ -610,12 +716,131 @@
         if (r.added.length) toast(`Qo'shildi: ${r.added.join(', ')}`, 'success');
         if (r.skipped.length) toast(`Allaqachon bor (o'tkazildi): ${r.skipped.join(', ')}`, 'warn', 5000);
       }
+      const keepSubject = body.subject;
       resetTestForm();
+      $('t-subject').value = keepSubject;
       $('t-question').focus();
+      await loadClasses();
       loadTests();
-      loadClasses();
     } catch (e2) {
       err.textContent = e2.message;
+    }
+  }
+
+  // ─── Word fayldan import ───
+  A.importSets = [];
+
+  async function onDocxRead() {
+    const files = [...$('docx-files').files];
+    const box = clear($('docx-preview'));
+    if (!files.length) return toast('Word fayllarni tanlang', 'warn');
+    const btn = $('docx-read');
+    btn.disabled = true;
+    box.append(h('p', { class: 'muted', text: 'Fayllar o\'qilmoqda...' }));
+    try {
+      const r = await DocxImport.parseFiles(files);
+      A.importSets = r.sets;
+      renderImportPreview(r);
+    } catch (err) {
+      clear(box).append(h('p', { class: 'form-error', text: err.message }));
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function renderImportPreview(r) {
+    const box = clear($('docx-preview'));
+    if (!r.hasKey) box.append(h('p', { class: 'form-error', text: 'Kalit fayli (kalit.docx) tanlanmagan — to\'g\'ri javoblarni bilib bo\'lmaydi.' }));
+    if (!r.sets.length) {
+      box.append(h('p', { class: 'form-error', text: 'Test fayllari topilmadi.' }));
+      return;
+    }
+    const table = h('div', { class: 'import-sets' });
+    r.sets.forEach((s, i) => {
+      const ok = !s.errors.length;
+      const cb = h('input', { type: 'checkbox', checked: ok, disabled: !ok, 'aria-label': `${s.class_id} ${s.subject} yuklansin` });
+      cb.addEventListener('change', () => { s.include = cb.checked; updateImportButton(); });
+      s.include = ok;
+      const subj = h('input', { class: 'import-subject', value: s.subject, maxlength: 60, 'aria-label': 'Fan nomi' });
+      subj.addEventListener('input', () => { s.subject = subj.value.trim(); updateImportButton(); });
+      const cls = h('input', { class: 'import-class', value: s.class_id, maxlength: 50, 'aria-label': 'Sinf' });
+      cls.addEventListener('input', () => { s.class_id = cls.value.trim(); updateImportButton(); });
+
+      const details = h('details', { class: 'import-details' },
+        h('summary', { text: 'Savollarni ko\'rish' }),
+        h('ol', {}, s.questions.map(q => h('li', {},
+          h('div', { class: 'imp-q', text: q.text }),
+          q.image ? h('img', { class: 'imp-img', src: q.image, alt: `${q.n}-savol rasmi` }) : null,
+          q.type === 'open'
+            ? h('div', { class: 'imp-ans' }, h('span', { class: 'badge st-active', text: 'Yozma' }), ` To'g'ri javob: `, h('b', { text: q.correct || '—' }))
+            : h('div', { class: 'imp-opts' }, q.options.map((o, j) => h('span', { class: o === q.correct ? 'ok' : '' },
+              `${'ABCDE'[j]}) ${o}`)))))));
+
+      table.append(h('div', { class: 'import-set' + (ok ? '' : ' bad') },
+        h('div', { class: 'import-top' },
+          h('label', { class: 'import-check' }, cb),
+          h('div', { class: 'import-names' }, cls, subj),
+          h('div', { class: 'import-stats' },
+            h('span', { class: 'badge', text: `${s.questions.length} savol` }),
+            h('span', { class: 'badge', text: `${s.choiceCount} variantli` }),
+            s.openCount ? h('span', { class: 'badge st-active', text: `${s.openCount} yozma` }) : null,
+            s.imageCount ? h('span', { class: 'badge', text: `${s.imageCount} rasm` }) : null,
+            ok ? h('span', { class: 'badge risk-low' }, icon('check-line'), ' Tayyor') : h('span', { class: 'badge risk-high', text: 'Xato' }))),
+        h('small', { class: 'muted', text: s.file }),
+        s.errors.length ? h('ul', { class: 'imp-errors' }, s.errors.map(e => h('li', { text: e }))) : null,
+        s.warnings.length ? h('ul', { class: 'imp-warnings' }, s.warnings.map(e => h('li', { text: e }))) : null,
+        details));
+    });
+    const replace = h('input', { type: 'checkbox', id: 'docx-replace', checked: true });
+    box.append(table,
+      h('label', { class: 'check' }, replace, h('span', {}, 'Shu sinf va fandagi ', h('b', { text: 'eski savollarni almashtirish' }), ' (o\'chirib, yangilarini yozish)')),
+      h('button', { class: 'btn btn-primary btn-lg', type: 'button', id: 'docx-upload', onclick: onDocxUpload }, icon('upload-cloud-2-line'), ' Yuklash'),
+      h('div', { id: 'docx-result' }));
+    updateImportButton();
+  }
+
+  function updateImportButton() {
+    const btn = $('docx-upload');
+    if (!btn) return;
+    const n = A.importSets.filter(s => s.include).length;
+    const q = A.importSets.filter(s => s.include).reduce((x, s) => x + s.questions.length, 0);
+    btn.disabled = !n || A.importSets.some(s => s.include && (!s.subject || !s.class_id));
+    clear(btn).append(icon('upload-cloud-2-line'), ` Yuklash — ${n} ta fayl, ${q} ta savol`);
+  }
+
+  async function onDocxUpload() {
+    const sets = A.importSets.filter(s => s.include);
+    if (!sets.length) return;
+    const replace = $('docx-replace').checked;
+    const ok = await confirmDialog(
+      `${sets.map(s => `${s.class_id} — ${s.subject}`).join(', ')} uchun savollar yuklanadi.` +
+      (replace ? ' Shu sinf va fanlardagi eski savollar almashtiriladi.' : ''),
+      { title: 'Savollarni yuklash', okText: 'Yuklash' });
+    if (!ok) return;
+    const btn = $('docx-upload');
+    const out = clear($('docx-result'));
+    btn.disabled = true;
+    const done = [];
+    try {
+      // Har bir fayl alohida so'rov — katta rasmlar bilan ham so'rov hajmi kichik bo'ladi
+      for (const s of sets) {
+        clear(btn).append(`${s.class_id} — ${s.subject} yuklanmoqda...`);
+        const r = await aapi('/api/admin/tests/import', { method: 'POST', body: {
+          replace,
+          sets: [{ class_id: s.class_id, subject: s.subject, questions: s.questions.map(q => ({
+            text: q.text, type: q.type, options: q.options, correct: q.correct, image: q.image })) }]
+        } });
+        done.push(...r.sets);
+      }
+      out.append(h('div', { class: 'imp-done' }, icon('checkbox-circle-line'), ' Yuklandi: ',
+        done.map(d => `${d.class_id} ${d.subject} — ${d.added} ta`).join('; ')));
+      toast('Savollar yuklandi', 'success', 5000);
+      await loadClasses();
+      loadTests();
+    } catch (err) {
+      out.append(h('p', { class: 'form-error', text: err.message + (done.length ? ` (yuklanganlar: ${done.map(d => d.class_id).join(', ')})` : '') }));
+    } finally {
+      updateImportButton();
     }
   }
 
@@ -777,11 +1002,15 @@
     const list = $('res-list');
     const classId = $('res-class').value;
     if (!silent) clear(list).append(h('div', { class: 'skeleton' }), h('div', { class: 'skeleton' }));
+    const seq = (A.attemptsSeq = (A.attemptsSeq || 0) + 1);
     try {
-      A.attempts = await aapi('/api/admin/attempts' + (classId ? '?class_id=' + encodeURIComponent(classId) : ''));
+      const rows = await aapi('/api/admin/attempts' + (classId ? '?class_id=' + encodeURIComponent(classId) : ''));
+      if (seq !== A.attemptsSeq) return; // sinf almashtirilgan — eski javob kerak emas
+      A.attempts = rows;
       $('live-dot').classList.remove('off');
       renderAttempts();
     } catch (err) {
+      if (seq !== A.attemptsSeq) return;
       $('live-dot').classList.add('off');
       if (!silent) clear(list).append(h('p', { class: 'empty error', text: err.message }));
     }
@@ -876,7 +1105,7 @@
             a.team_name && a.team_name !== '-' ? h('small', { text: a.team_name }) : null),
           h('span', { class: 'badge ' + st.cls, text: st.label })),
         h('div', { class: 'attempt-meta' },
-          h('span', { class: 'chip', text: a.class_id }),
+          h('span', { class: 'chip', text: a.class_id + (a.subject ? ' · ' + a.subject : '') }),
           progress,
           h('span', { class: 'badge ' + risk.cls }, icon(risk.icon), ' ', risk.label),
           a.violations > 0 ? h('span', { class: 'badge risk-high', title: 'Qoidabuzarliklar' }, icon('alarm-warning-line'), ` ${a.violations}`) : null,
@@ -948,6 +1177,7 @@
 
     const info = h('div', { class: 'kv' },
       kv('Sinf', d.class_id),
+      d.subject ? kv('Fan', d.subject) : null,
       d.team_name && d.team_name !== '-' ? kv('Jamoa', d.team_name) : null,
       kv('Holat', h('span', { class: 'badge ' + st.cls, text: st.label })),
       kv('Ball', `${d.score} / ${d.total}`),
@@ -1295,6 +1525,10 @@
     $('bulk-upload').addEventListener('click', uploadBulk);
 
     $('t-class').addEventListener('change', () => { resetTestForm(); loadTests(); });
+    $('t-subject-filter').addEventListener('change', renderTests);
+    $('t-type').addEventListener('change', syncTypeFields);
+    $('t-image').addEventListener('change', onImagePick);
+    $('docx-read').addEventListener('click', onDocxRead);
     $('t-form').addEventListener('submit', onSaveTest);
     $('t-cancel').addEventListener('click', resetTestForm);
 

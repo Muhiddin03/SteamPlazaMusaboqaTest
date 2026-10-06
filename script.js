@@ -75,8 +75,10 @@
         return;
       }
       for (const c of classes) {
-        grid.append(h('button', { class: 'class-btn', type: 'button', onclick: () => openRegister(c.id) },
-          icon('team-line'), h('span', { text: c.id })));
+        const subjects = c.subjects || [];
+        grid.append(h('button', { class: 'class-btn', type: 'button', onclick: () => openClass(c) },
+          icon('team-line'), h('span', { text: c.id }),
+          subjects.some(s => s.subject) ? h('small', { class: 'class-subjects', text: subjects.map(s => s.subject || 'Umumiy').join(', ') }) : null));
       }
     } catch (err) {
       clear(grid).append(h('div', { class: 'empty error' },
@@ -89,11 +91,39 @@
     try { S.settings = await api('/api/settings'); } catch { /* standart qiymatlar qoladi */ }
   }
 
+  // ─── FAN TANLASH ───────────────────────────────────────────────────────────
+  // Sinfda bitta fan bo'lsa — to'g'ridan-to'g'ri ism kiritishga, bir nechta bo'lsa — fanni tanlash
+  function openClass(c) {
+    const subjects = c.subjects || [];
+    if (subjects.length <= 1) return openRegister(c.id, subjects[0] ? subjects[0].subject : '');
+    $('subj-class').textContent = c.id;
+    const grid = clear($('subject-grid'));
+    for (const s of subjects) {
+      grid.append(h('button', { class: 'class-btn subject-btn', type: 'button', onclick: () => openRegister(c.id, s.subject) },
+        icon(subjectIcon(s.subject)), h('span', { text: s.subject || 'Umumiy test' }),
+        h('small', { class: 'class-subjects', text: `${s.count} ta savol` })));
+    }
+    show('scr-subjects');
+  }
+
+  function subjectIcon(name) {
+    const n = (name || '').toLowerCase();
+    if (/fizik/.test(n)) return 'flask-line';
+    if (/matem|algebra|geometr/.test(n)) return 'calculator-line';
+    if (/kimyo/.test(n)) return 'test-tube-line';
+    if (/biolog/.test(n)) return 'leaf-line';
+    if (/informat|dastur|scratch|html/.test(n)) return 'code-s-slash-line';
+    if (/ingliz|english|til|adabiyot/.test(n)) return 'translate-2';
+    if (/tarix|geograf/.test(n)) return 'earth-line';
+    return 'book-2-line';
+  }
+
   // ─── RO'YXATDAN O'TISH ─────────────────────────────────────────────────────
   // 1-qadam: faqat ism familiya
-  function openRegister(classId) {
+  function openRegister(classId, subject = '') {
     S.classId = classId;
-    $('reg-class').textContent = classId;
+    S.subject = subject;
+    $('reg-class').textContent = subject ? `${classId} · ${subject}` : classId;
     $('reg-error').textContent = '';
     show('scr-register');
     $('reg-name').focus();
@@ -199,10 +229,10 @@
       if (needCamera) await startCamera();
       const res = await api('/api/attempt/start', {
         method: 'POST',
-        body: { class_id: S.classId, student_name: S.pendingName, camera: !!S.stream }
+        body: { class_id: S.classId, subject: S.subject || '', student_name: S.pendingName, camera: !!S.stream }
       });
       S.token = res.token;
-      S.info = { name: S.pendingName, classId: S.classId };
+      S.info = { name: S.pendingName, classId: S.subject ? `${S.classId} · ${S.subject}` : S.classId };
       store.set(TOKEN_KEY, res.token);
       store.set(INFO_KEY, JSON.stringify(S.info));
       $('modal-rules').hidden = true;
@@ -252,7 +282,13 @@
     if (q.id !== S.questionId) {
       S.questionId = q.id;
       S.selected = null;
+      S.questionType = q.type || 'choice';
       $('q-text').textContent = q.text;
+      showQuestionImage(q.image_id);
+      const open = S.questionType === 'open';
+      $('q-open').hidden = !open;
+      $('q-options').hidden = open;
+      $('q-open-input').value = '';
       const box = clear($('q-options'));
       q.options.forEach((opt, i) => {
         const b = h('button', { class: 'option', type: 'button', role: 'radio', 'aria-checked': 'false',
@@ -269,6 +305,37 @@
     clearInterval(S.timers.tick);
     S.timers.tick = setInterval(tick, 250);
     tick();
+  }
+
+  // Savol rasmi — blob orqali (CSP img-src faqat o'z sayti); bir xil rasm qayta yuklanmaydi
+  const imageCache = new Map();
+  function showQuestionImage(imageId) {
+    const wrap = $('q-image');
+    const img = $('q-image-img');
+    if (!imageId) { wrap.hidden = true; img.removeAttribute('src'); return; }
+    wrap.hidden = false;
+    wrap.classList.add('loading');
+    const done = url => { img.src = url; wrap.classList.remove('loading'); };
+    if (imageCache.has(imageId)) return done(imageCache.get(imageId));
+    api('/api/test-images/' + imageId, { raw: true })
+      .then(r => r.blob())
+      .then(b => { const u = URL.createObjectURL(b); imageCache.set(imageId, u); if (S.state?.question?.image_id === imageId) done(u); })
+      .catch(() => { wrap.classList.remove('loading'); img.alt = 'Rasm yuklanmadi — sahifani yangilang'; });
+  }
+
+  // Yozma javob
+  function onOpenSubmit(e) {
+    e.preventDefault();
+    if (S.submitting) return;
+    const value = $('q-open-input').value.trim();
+    if (!value) {
+      $('q-open-input').focus();
+      return toast('Javobni yozing', 'warn', 1500);
+    }
+    S.selected = value;
+    $('q-open-input').blur();
+    $('quiz-body').classList.add('leaving');
+    submit(value);
   }
 
   // Bitta bosishda javob yuboriladi
@@ -291,12 +358,18 @@
     $('q-timebar').style.width = `${Math.min(100, (left / S.limitMs) * 100)}%`;
     $('q-timer').classList.toggle('low', sec <= 10);
     $('q-timebar').classList.toggle('low', sec <= 10);
-    if (left <= 0 && !S.submitting) submit(S.selected);
+    if (left <= 0 && !S.submitting) {
+      // Vaqt tugadi: yozma savolda yozib ulgurgan narsasi yuboriladi
+      const typed = S.questionType === 'open' ? $('q-open-input').value.trim() : '';
+      submit(typed || S.selected);
+    }
   }
 
   function setBusy(busy) {
     S.submitting = busy;
     for (const b of $('q-options').children) b.disabled = busy;
+    $('q-open-input').disabled = busy;
+    $('q-open-send').disabled = busy;
     if (!busy) {
       $('quiz-body').classList.remove('leaving');
       for (const b of $('q-options').children) b.classList.remove('sending');
@@ -505,7 +578,8 @@
   }
 
   function onResize() {
-    if (!S.active) return;
+    // Yozma javob paytida telefon klaviaturasi ochilib ekran kichrayadi — bu ekranni bo'lish emas
+    if (!S.active || S.typing) return;
     clearTimeout(S.timers.resize);
     S.timers.resize = setTimeout(() => {
       const area = innerWidth * innerHeight;
@@ -788,7 +862,8 @@
   // Qog'ozda ishlashga ruxsat bo'lsa — pastga qarash va harakat kechiriladi, faqat kuchli burilish hisoblanadi.
   function faceRules() {
     const posture = ['head_turned', 'looking_down', 'motion'];
-    if (!$('draft').hidden) return FACE_RULES.filter(r => !posture.includes(r.key));
+    // Qoralama ochiq yoki javob yozayotgan bo'lsa — ekranning pastiga qaraydi, bosh holati tekshirilmaydi
+    if (!$('draft').hidden || S.typing) return FACE_RULES.filter(r => !posture.includes(r.key));
     if (!S.settings.allow_paper) return FACE_RULES;
     return FACE_RULES
       .filter(r => r.key !== 'looking_down' && r.key !== 'motion')
@@ -891,6 +966,22 @@
     $('reg-form').addEventListener('submit', onContinue);
     bindDraft();
     $('btn-back').addEventListener('click', () => show('scr-classes'));
+    $('btn-back-classes').addEventListener('click', () => show('scr-classes'));
+    $('q-open').addEventListener('submit', onOpenSubmit);
+    $('q-open-input').addEventListener('focus', () => { S.typing = true; });
+    $('q-open-input').addEventListener('blur', () => { setTimeout(() => { S.typing = false; }, 600); });
+    $('q-image').addEventListener('click', () => {
+      const src = $('q-image-img');
+      const big = $('overlay-image-img');
+      big.src = src.src;
+      // Keng rasm telefonda mayda ko'rinadi — kattaroq ko'rsatib, barmoq bilan surish mumkin
+      const wide = src.naturalWidth > src.naturalHeight * 1.6 && innerWidth < innerHeight;
+      $('overlay-image').classList.toggle('wide', wide);
+      $('overlay-image').hidden = false;
+      $('overlay-image-scroll').scrollLeft = 0;
+    });
+    $('overlay-image-close').addEventListener('click', () => { $('overlay-image').hidden = true; });
+    $('overlay-image').addEventListener('click', e => { if (e.target === $('overlay-image')) $('overlay-image').hidden = true; });
     $('btn-rules-ok').addEventListener('click', onRulesOk);
     $('btn-rules-back').addEventListener('click', () => { $('modal-rules').hidden = true; });
     $('btn-warn-ok').addEventListener('click', () => {

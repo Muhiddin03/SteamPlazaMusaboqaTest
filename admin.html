@@ -146,25 +146,51 @@
             <section id="tab-tests" class="tab" hidden>
                 <h1>Savollar bazasi</h1>
                 <div class="card">
-                    <label class="field">
-                        <span>Sinf</span>
-                        <select id="t-class"></select>
-                    </label>
+                    <div class="grid-2">
+                        <label class="field">
+                            <span>Sinf</span>
+                            <select id="t-class"></select>
+                        </label>
+                        <label class="field">
+                            <span>Fan</span>
+                            <select id="t-subject-filter"><option value="">Barcha fanlar</option></select>
+                        </label>
+                    </div>
                     <div class="class-tools">
                         <button class="btn btn-ghost btn-sm" id="t-pdf" type="button"><i class="ri-file-pdf-2-line"></i> Savollar PDF</button>
                         <button class="btn btn-ghost btn-sm" id="t-copy" type="button"><i class="ri-share-forward-line"></i> Parallel sinflarga tarqatish</button>
                         <button class="btn btn-ghost btn-sm" id="t-dedup" type="button"><i class="ri-scissors-cut-line"></i> Takrorlarni tozalash</button>
                     </div>
                     <form id="t-form" novalidate>
+                        <div class="grid-2">
+                            <label class="field">
+                                <span>Fan</span>
+                                <input id="t-subject" list="t-subject-list" maxlength="60" placeholder="Masalan: Fizika (bo'sh — umumiy)">
+                                <datalist id="t-subject-list"></datalist>
+                            </label>
+                            <label class="field">
+                                <span>Savol turi</span>
+                                <select id="t-type">
+                                    <option value="choice">Variantli (A, B, C, D)</option>
+                                    <option value="open">Yozma javob (o'quvchi o'zi yozadi)</option>
+                                </select>
+                            </label>
+                        </div>
                         <label class="field">
                             <span>Savol matni</span>
-                            <textarea id="t-question" rows="3" maxlength="1000" placeholder="Savolni yozing"></textarea>
+                            <textarea id="t-question" rows="3" maxlength="2000" placeholder="Savolni yozing"></textarea>
+                        </label>
+                        <label class="field">
+                            <span>Rasm <small>(ixtiyoriy)</small></span>
+                            <input type="file" id="t-image" accept="image/png,image/jpeg,image/gif,image/webp">
+                            <span class="t-image-preview" id="t-image-preview" hidden></span>
                         </label>
                         <label class="field">
                             <span>To'g'ri javob</span>
                             <input id="t-correct" class="input-correct" maxlength="300" placeholder="To'g'ri javob">
+                            <small id="t-open-hint" hidden>Yozma javobda son va birlikni yozing, masalan: <b>10 m/s</b>. O'quvchi "10", "10 m/s" yoki "10m/s" yozsa ham to'g'ri hisoblanadi.</small>
                         </label>
-                        <div class="grid-3">
+                        <div class="grid-3" id="t-wrong-box">
                             <label class="field"><span>Xato javob 1</span><input id="t-wrong1" maxlength="300"></label>
                             <label class="field"><span>Xato javob 2</span><input id="t-wrong2" maxlength="300"></label>
                             <label class="field"><span>Xato javob 3 <small>(ixtiyoriy)</small></span><input id="t-wrong3" maxlength="300"></label>
@@ -185,6 +211,16 @@
                             <button class="btn btn-ghost" type="button" id="t-cancel" hidden>Bekor qilish</button>
                         </div>
                     </form>
+                </div>
+
+                <div class="card import-card">
+                    <h2><i class="ri-file-word-2-line"></i> Word fayldan yuklash (fanlar bo'yicha)</h2>
+                    <p class="muted small">Test fayllari (masalan <b>fizika 7-sinf.docx</b>, <b>fizika 8-sinf.docx</b>...) va <b>kalit.docx</b> ni birga tanlang. Savollar, variantlar, rasmlar va yozma javobli savollar avtomatik o'qiladi. Sinf va fan nomi fayl nomidan olinadi.</p>
+                    <div class="row">
+                        <input type="file" id="docx-files" accept=".docx" multiple aria-label="Word fayllarni tanlash">
+                        <button class="btn btn-primary" type="button" id="docx-read"><i class="ri-search-eye-line"></i> O'qish va tekshirish</button>
+                    </div>
+                    <div id="docx-preview" class="docx-preview" aria-live="polite"></div>
                 </div>
 
                 <div class="card bulk-card">
@@ -273,6 +309,7 @@
     <script src="config.js"></script>
     <script src="common.js"></script>
     <script src="report-pdf.js"></script>
+    <script src="docx-import.js"></script>
     <script src="admin.js"></script>
 </body>
 </html>

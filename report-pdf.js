@@ -166,7 +166,7 @@ const Report = (() => {
     doc.setTextColor(...MUTED);
     const duration = a.finished_at ? secs(new Date(a.finished_at) - new Date(a.started_at)) : '-';
     const team = a.team_name && a.team_name !== '-' ? ` · Jamoa: ${a.team_name}` : '';
-    doc.text(pdfText(`Sinf: ${a.class_id}${team} · Boshlandi: ${date(a.started_at)} · Davomiyligi: ${duration}`), M, 42);
+    doc.text(pdfText(`Sinf: ${a.class_id}${a.subject ? ' · Fan: ' + a.subject : ''}${team} · Boshlandi: ${date(a.started_at)} · Davomiyligi: ${duration}`), M, 42);
     doc.setTextColor(...DARK);
 
     const pct = percent(a);
@@ -328,7 +328,7 @@ const Report = (() => {
       head: [["O'rin", 'Ism familiya', 'Sinf', 'Ball', '%', 'Baho', 'Qoidabuz.', 'Ogohl.', 'Nazorat', 'Holat']],
       body: ranked(list).map((a, i) => {
         const pct = percent(a);
-        return [i + 1, a.student_name, a.class_id, `${a.score}/${a.total}`, `${pct}%`, grade(pct).mark,
+        return [i + 1, a.student_name, a.class_id + (a.subject ? ' ' + a.subject : ''), `${a.score}/${a.total}`, `${pct}%`, grade(pct).mark,
           a.violations, warningCount(a), (ui.RISK[a.risk] || ui.RISK.unknown).label,
           (ui.STATUS[a.status] || {}).label || a.status].map(pdfText);
       }),
@@ -387,8 +387,9 @@ const Report = (() => {
     header(doc, title, date(new Date()));
     const groups = new Map();
     for (const a of list) {
-      if (!groups.has(a.class_id)) groups.set(a.class_id, []);
-      groups.get(a.class_id).push(a);
+      const g = a.class_id + (a.subject ? ' — ' + a.subject : '');
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g).push(a);
     }
     const PLACE = ['1 (Oltin)', '2 (Kumush)', '3 (Bronza)'];
     let y = 32;

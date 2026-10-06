@@ -24,6 +24,13 @@
             <div id="class-grid" class="class-grid" aria-live="polite"></div>
         </section>
 
+        <section id="scr-subjects" class="screen" hidden>
+            <button class="back-link" id="btn-back-classes" type="button"><i class="ri-arrow-left-line"></i> Sinflar</button>
+            <span class="chip chip-primary" id="subj-class"></span>
+            <h1 class="page-title">Fanni tanlang</h1>
+            <div id="subject-grid" class="class-grid subject-grid"></div>
+        </section>
+
         <section id="scr-register" class="screen" hidden>
             <button class="back-link" id="btn-back" type="button"><i class="ri-arrow-left-line"></i> Orqaga</button>
             <div class="card">
@@ -52,7 +59,18 @@
             <div class="face-banner" id="face-banner" role="alert" hidden></div>
             <div class="quiz-body" id="quiz-body">
                 <div class="q-text" id="q-text"></div>
+                <button class="q-image" id="q-image" type="button" hidden aria-label="Rasmni kattalashtirish">
+                    <img id="q-image-img" alt="Savol rasmi">
+                    <span class="q-image-zoom"><i class="ri-zoom-in-line"></i></span>
+                </button>
                 <div class="options" id="q-options" role="radiogroup" aria-labelledby="q-text"></div>
+                <form class="open-answer" id="q-open" hidden novalidate>
+                    <label for="q-open-input">Javobingizni yozing</label>
+                    <input id="q-open-input" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="100"
+                           inputmode="text" enterkeyhint="send" placeholder="Masalan: 10 m/s">
+                    <small class="muted">Son va o'lchov birligini yozing (masalan: 450 m)</small>
+                    <button class="btn btn-primary btn-block btn-lg" id="q-open-send" type="submit">Javobni yuborish <i class="ri-send-plane-fill"></i></button>
+                </form>
             </div>
             <p class="quiz-note"><i class="ri-eye-line"></i> Javobni bosing — keyingi savol darhol chiqadi</p>
 
@@ -117,6 +135,12 @@
             <p class="warn-count" id="warn-count"></p>
             <button class="btn btn-primary btn-block btn-lg" id="btn-warn-ok" type="button">Testga qaytish</button>
         </div>
+    </div>
+
+    <div id="overlay-image" class="overlay image-overlay" hidden>
+        <div class="image-scroll" id="overlay-image-scroll"><img id="overlay-image-img" alt="Savol rasmi (katta)"></div>
+        <small class="image-hint">Rasmni barmoq bilan suring</small>
+        <button class="btn btn-primary" id="overlay-image-close" type="button"><i class="ri-close-line"></i> Yopish</button>
     </div>
 
     <div id="overlay-resume" class="overlay" hidden>

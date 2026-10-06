@@ -716,3 +716,27 @@ body.quiz-active .topbar-btn { display: none; }
 .imp-opts .ok { color: #047857; font-weight: 800; }
 .imp-ans b { color: #047857; }
 .imp-done { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #047857; }
+
+/* Savollar paneli: raqamni bosib istalgan savolga o'tish */
+.q-nav {
+    display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 8px; margin-bottom: 4px; flex-shrink: 0;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.q-nav::-webkit-scrollbar { display: none; }
+.q-nav button {
+    flex: 0 0 auto; min-width: 38px; height: 38px; padding: 0 6px; border-radius: 10px;
+    border: 2px solid var(--border); background: #fff; color: var(--muted);
+    font: inherit; font-weight: 800; font-size: 15px; cursor: pointer; position: relative;
+}
+.q-nav button.done { background: var(--primary); border-color: var(--primary); color: #fff; }
+.q-nav button.cur { border-color: var(--dark); color: var(--dark); box-shadow: 0 0 0 2px rgba(15, 23, 42, .15); }
+.q-nav button.done.cur { color: #fff; border-color: var(--dark); }
+.q-nav button.unsaved::after {
+    content: ''; position: absolute; top: -3px; right: -3px; width: 9px; height: 9px;
+    border-radius: 50%; background: var(--warn); border: 2px solid #fff;
+}
+.quiz-foot { display: grid; grid-template-columns: 56px 1fr 56px; gap: 8px; margin-top: 8px; flex-shrink: 0; }
+.quiz-foot .btn { min-height: 48px; padding: 0; font-size: 16px; }
+.quiz-foot .btn i { font-size: 24px; }
+.quiz-foot .finish-btn i { font-size: 18px; }
+.quiz-note.sync-warn { color: #92400e; }

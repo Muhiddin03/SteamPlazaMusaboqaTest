@@ -14,10 +14,14 @@
     info: null,
     state: null,
     questionId: null,
-    selected: null,
+    qs: [],
+    answers: {},
+    pending: new Map(),   // question_id -> javob (serverga hali yetmagan)
+    qTime: {},
+    cur: 0,
+    viewStart: 0,
     deadline: 0,
-    limitMs: 1,
-    submitting: false,
+    totalMs: 1,
     active: false,
     fullscreen: false,
     stream: null,
@@ -147,7 +151,7 @@
   async function openRules() {
     await loadSettings(); // admin hozirgina o'zgartirgan vaqt/kamera sozlamasi ko'rinsin
     const s = S.settings;
-    $('rules-time').textContent = `⏱ Har bir savolga ${s.question_time_sec} soniya`;
+    $('rules-time').textContent = `⏱ Har savolga o'rtacha ${s.question_time_sec} soniya — savollarni istalgan tartibda ishlaysiz`;
     const forbidden = [
       'Testdan yoki ilovadan chiqish',
       'Boshqa sayt, ChatGPT, telefon, kitob',
@@ -266,138 +270,274 @@
       startFaceMonitor();
     }
     render(state);
+    preloadImages();
   }
 
+  // Barcha savollar bir marta keladi: savollar orasida yurish darhol (serverni kutmaydi),
+  // javoblar esa orqa fonda navbat bilan saqlanadi.
   function render(state) {
     S.state = state;
     updateViolations(state);
     if (state.status !== 'active') return endQuiz(state);
 
-    const q = state.question;
-    $('q-num').textContent = q.number;
-    $('q-total').textContent = state.total;
-    S.limitMs = q.limit_ms;
-    S.deadline = performance.now() + q.remaining_ms;
-
-    if (q.id !== S.questionId) {
-      S.questionId = q.id;
-      S.selected = null;
-      S.questionType = q.type || 'choice';
-      $('q-text').textContent = q.text;
-      showQuestionImage(q.image_id);
-      const open = S.questionType === 'open';
-      $('q-open').hidden = !open;
-      $('q-options').hidden = open;
-      $('q-open-input').value = '';
-      const box = clear($('q-options'));
-      q.options.forEach((opt, i) => {
-        const b = h('button', { class: 'option', type: 'button', role: 'radio', 'aria-checked': 'false',
-          'aria-label': `${String.fromCharCode(65 + i)}) ${opt}`, onclick: () => choose(b, opt) },
-        h('span', { class: 'option-letter', text: String.fromCharCode(65 + i) }),
-        h('span', { class: 'option-text', text: opt }));
-        box.append(b);
-      });
-      $('quiz-body').scrollTop = 0;
-      $('quiz-body').classList.remove('leaving');
-      clearDraft(); // har savol uchun toza qoralama
-    }
-    setBusy(false);
+    S.qs = state.questions || [];
+    S.answers = { ...(state.answers || {}), ...Object.fromEntries(S.pending) };   // saqlanmagan javoblar yo'qolmasin
+    S.totalMs = Math.max(1, state.total_ms || 1);
+    S.deadline = performance.now() + state.remaining_ms;
+    $('q-total').textContent = S.qs.length;
+    buildNav();
+    goTo(S.questionId ? Math.max(0, S.qs.findIndex(q => q.id === S.questionId)) : (state.current || 0), true);
     clearInterval(S.timers.tick);
     S.timers.tick = setInterval(tick, 250);
     tick();
   }
 
+  function buildNav() {
+    const nav = clear($('q-nav'));
+    S.qs.forEach((q, i) => nav.append(h('button', {
+      type: 'button', text: i + 1, 'aria-label': `${i + 1}-savol`, onclick: () => goTo(i)
+    })));
+    updateNav();
+  }
+
+  function updateNav() {
+    const btns = $('q-nav').children;
+    S.qs.forEach((q, i) => {
+      const b = btns[i];
+      if (!b) return;
+      b.classList.toggle('done', S.answers[q.id] != null);
+      b.classList.toggle('cur', i === S.cur);
+      b.classList.toggle('unsaved', S.pending.has(q.id));
+    });
+    const left = S.qs.filter(q => S.answers[q.id] == null).length;
+    $('btn-finish').classList.toggle('btn-ghost', left > 0);
+    $('btn-finish').classList.toggle('btn-primary', left === 0);
+  }
+
+  // Savolda o'tkazilgan vaqt (admin hisobotida ko'rinadi)
+  function stopQuestionClock() {
+    const q = S.qs[S.cur];
+    if (q && S.viewStart) S.qTime[q.id] = (S.qTime[q.id] || 0) + (performance.now() - S.viewStart);
+    S.viewStart = performance.now();
+  }
+
+  function goTo(i, force = false) {
+    if (!S.qs.length) return;
+    i = Math.max(0, Math.min(S.qs.length - 1, i));
+    if (i === S.cur && !force) return;
+    saveTyped();
+    stopQuestionClock();
+    S.cur = i;
+    const q = S.qs[i];
+    S.questionId = q.id;
+    S.questionType = q.type || 'choice';
+    $('q-num').textContent = i + 1;
+    $('q-text').textContent = q.text;
+    showQuestionImage(q.image_id);
+    const open = S.questionType === 'open';
+    $('q-open').hidden = !open;
+    $('q-options').hidden = open;
+    $('q-open-input').value = open ? (S.answers[q.id] ?? '') : '';
+    const box = clear($('q-options'));
+    q.options.forEach((opt, k) => {
+      const sel = S.answers[q.id] === opt;
+      const b = h('button', { class: 'option' + (sel ? ' selected' : ''), type: 'button', role: 'radio', 'aria-checked': String(sel),
+        'aria-label': `${String.fromCharCode(65 + k)}) ${opt}`, onclick: () => choose(b, opt) },
+      h('span', { class: 'option-letter', text: String.fromCharCode(65 + k) }),
+      h('span', { class: 'option-text', text: opt }));
+      box.append(b);
+    });
+    $('q-prev').disabled = i === 0;
+    $('q-next').disabled = i === S.qs.length - 1;
+    $('quiz-body').scrollTop = 0;
+    clearDraft(); // har savol uchun toza qoralama
+    updateNav();
+    const chip = $('q-nav').children[i];
+    if (chip) chip.scrollIntoView({ block: 'nearest', inline: 'center', behavior: force ? 'auto' : 'smooth' });
+  }
+
   // Savol rasmi — blob orqali (CSP img-src faqat o'z sayti); bir xil rasm qayta yuklanmaydi
   const imageCache = new Map();
+  function loadImage(imageId) {
+    if (!imageCache.has(imageId)) {
+      imageCache.set(imageId, api('/api/test-images/' + imageId, { raw: true })
+        .then(r => r.blob())
+        .then(b => URL.createObjectURL(b))
+        .catch(err => { imageCache.delete(imageId); throw err; }));
+    }
+    return imageCache.get(imageId);
+  }
   function showQuestionImage(imageId) {
     const wrap = $('q-image');
     const img = $('q-image-img');
     if (!imageId) { wrap.hidden = true; img.removeAttribute('src'); return; }
     wrap.hidden = false;
     wrap.classList.add('loading');
-    const done = url => { img.src = url; wrap.classList.remove('loading'); };
-    if (imageCache.has(imageId)) return done(imageCache.get(imageId));
-    api('/api/test-images/' + imageId, { raw: true })
-      .then(r => r.blob())
-      .then(b => { const u = URL.createObjectURL(b); imageCache.set(imageId, u); if (S.state?.question?.image_id === imageId) done(u); })
+    img.removeAttribute('src');
+    loadImage(imageId)
+      .then(url => { if (S.qs[S.cur]?.image_id === imageId) { img.src = url; wrap.classList.remove('loading'); } })
       .catch(() => { wrap.classList.remove('loading'); img.alt = 'Rasm yuklanmadi — sahifani yangilang'; });
   }
+  // Rasmlar test boshida oldindan yuklanadi — savolga o'tganda kutilmaydi
+  function preloadImages() {
+    for (const q of S.qs) if (q.image_id) loadImage(q.image_id).catch(() => {});
+  }
 
-  // Yozma javob
+  function setAnswer(q, answer) {
+    if (answer == null) delete S.answers[q.id];
+    else S.answers[q.id] = answer;
+    S.pending.set(q.id, answer);
+    updateNav();
+    flushAnswers();
+  }
+
+  // Yozma javob: boshqa savolga o'tganda yozilgani avtomatik saqlanadi
+  function saveTyped() {
+    const q = S.qs[S.cur];
+    if (!q || q.type !== 'open') return;
+    const value = $('q-open-input').value.trim() || null;
+    if (value !== (S.answers[q.id] ?? null)) setAnswer(q, value);
+  }
+
   function onOpenSubmit(e) {
     e.preventDefault();
-    if (S.submitting) return;
     const value = $('q-open-input').value.trim();
     if (!value) {
       $('q-open-input').focus();
       return toast('Javobni yozing', 'warn', 1500);
     }
-    S.selected = value;
     $('q-open-input').blur();
-    $('quiz-body').classList.add('leaving');
-    submit(value);
+    saveTyped();
+    toast('Javob saqlandi', 'success', 1000);
+    nextQuestion();
   }
 
-  // Bitta bosishda javob yuboriladi
+  // Bitta bosishda javob belgilanadi va keyingi savolga o'tiladi (javobni keyin o'zgartirish mumkin)
   function choose(btn, opt) {
-    if (S.submitting) return;
+    if (!S.active) return;
+    const q = S.qs[S.cur];
     for (const b of $('q-options').children) {
       b.classList.toggle('selected', b === btn);
       b.setAttribute('aria-checked', String(b === btn));
     }
-    S.selected = opt;
-    btn.classList.add('sending');
-    $('quiz-body').classList.add('leaving');
-    submit(opt);
+    setAnswer(q, opt);
+    const at = S.cur;
+    setTimeout(() => { if (S.active && S.cur === at) nextQuestion(); }, 280);
+  }
+
+  // Keyingi savol; oxirida — birinchi javobsiz savolga qaytadi
+  function nextQuestion() {
+    if (S.cur < S.qs.length - 1) return goTo(S.cur + 1);
+    const empty = S.qs.findIndex(q => S.answers[q.id] == null);
+    if (empty >= 0) goTo(empty);
+    else askFinish();
+  }
+
+  // ─── Javoblarni saqlash navbati ───
+  async function flushAnswers() {
+    if (S.flushing || !S.active) return;
+    S.flushing = true;
+    try {
+      while (S.pending.size && S.active) {
+        const [id, answer] = S.pending.entries().next().value;
+        if (id === S.qs[S.cur]?.id) stopQuestionClock();
+        try {
+          const r = await api('/api/attempt/answer', {
+            method: 'POST', attempt: S.token,
+            body: { question_id: id, answer, time_ms: Math.round(S.qTime[id] || 0), index: S.cur }
+          });
+          if (S.pending.get(id) === answer) S.pending.delete(id);   // shu orada o'zgarmagan bo'lsa
+          setSync(null);
+          if (typeof r.remaining_ms === 'number' && r.status === 'active') S.deadline = performance.now() + r.remaining_ms;
+          applyEventResult(r);
+        } catch (err) {
+          if (err.status === 404 || err.status === 401) return sessionLost();
+          if (err.status === 0 || err.status >= 500 || err.status === 429) {
+            setSync('Aloqa yo\'q — javoblar telefonda saqlanib turibdi, aloqa tiklansa yuboriladi');
+            await new Promise(r => setTimeout(r, 2000));
+            continue;
+          }
+          S.pending.delete(id);
+          toast(err.message, 'error');
+        }
+        updateNav();
+      }
+    } finally {
+      S.flushing = false;
+      updateNav();
+    }
+  }
+
+  function setSync(text) {
+    const el = $('q-sync');
+    el.classList.toggle('sync-warn', !!text);
+    clear(el).append(icon(text ? 'wifi-off-line' : 'information-line'),
+      ' ' + (text || 'Qiyin savolni tashlab keting — raqamini bosib istalgan paytda qaytasiz'));
+  }
+
+  async function waitSaved(maxMs) {
+    const end = performance.now() + maxMs;
+    flushAnswers();
+    while ((S.pending.size || S.flushing) && performance.now() < end) await new Promise(r => setTimeout(r, 150));
+    return !S.pending.size;
+  }
+
+  function askFinish() {
+    saveTyped();
+    const left = S.qs.filter(q => S.answers[q.id] == null).length;
+    $('finish-text').textContent = left
+      ? `${left} ta savolga javob bermadingiz. Yakunlangandan keyin javoblarni o'zgartirib bo'lmaydi.`
+      : 'Barcha savollarga javob berdingiz. Yakunlangandan keyin javoblarni o\'zgartirib bo\'lmaydi.';
+    $('overlay-finish').hidden = false;
+  }
+
+  async function finish(auto) {
+    if (S.finishing || !S.active) return;
+    S.finishing = true;
+    const btn = $('btn-finish-ok');
+    btn.disabled = true;
+    btn.textContent = 'Yuborilmoqda...';
+    try {
+      saveTyped();
+      stopQuestionClock();
+      const saved = await waitSaved(auto ? 8000 : 15000);
+      if (!saved && !auto) {
+        toast('Aloqa yo\'q — javoblar hali yuborilmadi. Internetni tekshiring.', 'error', 4000);
+        return;
+      }
+      for (let i = 0; i < 4; i++) {
+        try {
+          $('overlay-finish').hidden = true;
+          return endQuiz(await api('/api/attempt/finish', { method: 'POST', attempt: S.token }));
+        } catch (err) {
+          if (err.status === 404 || err.status === 401) return sessionLost();
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      }
+      toast('Aloqa yo\'q. Qayta urinib ko\'ring.', 'error', 4000);
+    } finally {
+      S.finishing = false;
+      btn.disabled = false;
+      btn.textContent = 'Ha, yakunlash';
+    }
   }
 
   function tick() {
     const left = Math.max(0, S.deadline - performance.now());
     const sec = Math.ceil(left / 1000);
-    $('q-time').textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-    $('q-timebar').style.width = `${Math.min(100, (left / S.limitMs) * 100)}%`;
-    $('q-timer').classList.toggle('low', sec <= 10);
-    $('q-timebar').classList.toggle('low', sec <= 10);
-    if (left <= 0 && !S.submitting) {
-      // Vaqt tugadi: yozma savolda yozib ulgurgan narsasi yuboriladi
-      const typed = S.questionType === 'open' ? $('q-open-input').value.trim() : '';
-      submit(typed || S.selected);
+    const hh = Math.floor(sec / 3600);
+    const mm = Math.floor((sec % 3600) / 60);
+    $('q-time').textContent = (hh ? `${hh}:${String(mm).padStart(2, '0')}` : mm) + ':' + String(sec % 60).padStart(2, '0');
+    $('q-timebar').style.width = `${Math.min(100, (left / S.totalMs) * 100)}%`;
+    const low = sec <= 60;
+    $('q-timer').classList.toggle('low', low);
+    $('q-timebar').classList.toggle('low', low);
+    if (sec === 300 && !S.warned5) { S.warned5 = true; toast('5 daqiqa qoldi!', 'warn', 3000); }
+    if (left <= 0) {
+      // Vaqt tugadi: yozilgan javoblar yuboriladi va test yakunlanadi
+      clearInterval(S.timers.tick);
+      finish(true);
     }
-  }
-
-  function setBusy(busy) {
-    S.submitting = busy;
-    for (const b of $('q-options').children) b.disabled = busy;
-    $('q-open-input').disabled = busy;
-    $('q-open-send').disabled = busy;
-    if (!busy) {
-      $('quiz-body').classList.remove('leaving');
-      for (const b of $('q-options').children) b.classList.remove('sending');
-    }
-  }
-
-  async function submit(answer) {
-    if (S.submitting || !S.active) return;
-    setBusy(true);
-    clearInterval(S.timers.tick);
-    const body = { question_id: S.questionId, answer };
-    for (let attempt = 0; attempt < 4; attempt++) {
-      try {
-        const state = await api('/api/attempt/answer', { method: 'POST', attempt: S.token, body });
-        render(state);
-        return;
-      } catch (err) {
-        if (err.status === 0) {
-          toast('Aloqa yo\'q. Qayta yuborilmoqda...', 'warn', 1500);
-          await new Promise(r => setTimeout(r, 1500));
-          continue;
-        }
-        if (err.status === 404 || err.status === 401) return sessionLost();
-        toast(err.message, 'error');
-        break;
-      }
-    }
-    await resync();
   }
 
   async function resync() {
@@ -405,16 +545,15 @@
       render(await api('/api/attempt/state', { attempt: S.token }));
     } catch (err) {
       if (err.status === 404 || err.status === 401) return sessionLost();
-      setBusy(false);
-      S.timers.tick = setInterval(tick, 250);
     }
   }
 
   async function heartbeat() {
     if (!S.active) return;
     try {
-      const r = await api('/api/attempt/heartbeat', { method: 'POST', attempt: S.token });
+      const r = await api('/api/attempt/heartbeat', { method: 'POST', attempt: S.token, body: { index: S.cur } });
       applyEventResult(r);
+      if (S.pending.size) flushAnswers();
     } catch (err) {
       if (err.status === 404 || err.status === 401) sessionLost();
     }
@@ -503,7 +642,7 @@
   // Hodisa o'qituvchiga yuboriladi. Kamera yoqilgan bo'lsa — aynan shu paytdagi kadr ham (dalil sifatida).
   async function report(type, detail = '', keepalive = false) {
     if (!S.token || !S.active) return false;
-    const body = { type, detail };
+    const body = { type, detail, index: S.cur };
     // Ilovadan chiqish paytida kadr eskirgan/qora bo'ladi — yubormaymiz; keepalive so'rovi ham kichik bo'lishi kerak
     if (!keepalive && type !== 'tab_hidden' && type !== 'ai_unavailable') {
       const image = captureFrame(false);
@@ -968,6 +1107,15 @@
     $('btn-back').addEventListener('click', () => show('scr-classes'));
     $('btn-back-classes').addEventListener('click', () => show('scr-classes'));
     $('q-open').addEventListener('submit', onOpenSubmit);
+    $('q-open-input').addEventListener('input', () => {
+      clearTimeout(S.timers.typed);
+      S.timers.typed = setTimeout(saveTyped, 1500);   // yozilgani sahifa yopilsa ham yo'qolmasin
+    });
+    $('q-prev').addEventListener('click', () => goTo(S.cur - 1));
+    $('q-next').addEventListener('click', () => goTo(S.cur + 1));
+    $('btn-finish').addEventListener('click', askFinish);
+    $('btn-finish-ok').addEventListener('click', () => finish(false));
+    $('btn-finish-back').addEventListener('click', () => { $('overlay-finish').hidden = true; });
     $('q-open-input').addEventListener('focus', () => { S.typing = true; });
     $('q-open-input').addEventListener('blur', () => { setTimeout(() => { S.typing = false; }, 600); });
     $('q-image').addEventListener('click', () => {

@@ -56,6 +56,7 @@
                 <button class="quiz-pill draft-btn" id="btn-draft" type="button" aria-label="Qoralama" title="Qoralama — misol ishlash uchun"><i class="ri-pencil-line"></i></button>
             </div>
             <div class="timebar"><div id="q-timebar"></div></div>
+            <nav class="q-nav" id="q-nav" aria-label="Savollar"></nav>
             <div class="face-banner" id="face-banner" role="alert" hidden></div>
             <div class="quiz-body" id="quiz-body">
                 <div class="q-text" id="q-text"></div>
@@ -69,10 +70,15 @@
                     <input id="q-open-input" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="100"
                            inputmode="text" enterkeyhint="send" placeholder="Masalan: 10 m/s">
                     <small class="muted">Son va o'lchov birligini yozing (masalan: 450 m)</small>
-                    <button class="btn btn-primary btn-block btn-lg" id="q-open-send" type="submit">Javobni yuborish <i class="ri-send-plane-fill"></i></button>
+                    <button class="btn btn-primary btn-block btn-lg" id="q-open-send" type="submit">Javobni saqlash <i class="ri-check-line"></i></button>
                 </form>
             </div>
-            <p class="quiz-note"><i class="ri-eye-line"></i> Javobni bosing — keyingi savol darhol chiqadi</p>
+            <div class="quiz-foot">
+                <button class="btn btn-ghost" id="q-prev" type="button" aria-label="Oldingi savol"><i class="ri-arrow-left-s-line"></i></button>
+                <button class="btn btn-primary finish-btn" id="btn-finish" type="button"><i class="ri-flag-2-fill"></i> Yakunlash</button>
+                <button class="btn btn-ghost" id="q-next" type="button" aria-label="Keyingi savol"><i class="ri-arrow-right-s-line"></i></button>
+            </div>
+            <p class="quiz-note" id="q-sync"><i class="ri-information-line"></i> Qiyin savolni tashlab keting — raqamini bosib istalgan paytda qaytasiz</p>
 
             <div class="draft" id="draft" hidden>
                 <div class="draft-bar">
@@ -149,6 +155,16 @@
             <h2>Test davom etmoqda</h2>
             <p>Sahifa qayta ochildi. Vaqt to'xtamaydi — tezroq davom eting.</p>
             <button class="btn btn-primary btn-block btn-lg" id="btn-resume" type="button">Davom etish</button>
+        </div>
+    </div>
+
+    <div id="overlay-finish" class="overlay" hidden role="dialog" aria-modal="true">
+        <div class="overlay-box">
+            <i class="ri-flag-2-fill overlay-icon"></i>
+            <h2>Testni yakunlaysizmi?</h2>
+            <p id="finish-text"></p>
+            <button class="btn btn-primary btn-block btn-lg" id="btn-finish-ok" type="button">Ha, yakunlash</button>
+            <button class="btn btn-ghost btn-block" id="btn-finish-back" type="button" style="margin-top:8px">Savollarga qaytish</button>
         </div>
     </div>
 
